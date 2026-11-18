@@ -3,6 +3,7 @@ import 'package:equatable/equatable.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_storage/firebase_storage.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import '../../firebase_options.dart';
 import '../utils/platform_info.dart';
 
@@ -47,10 +48,16 @@ class FirebaseBootstrapState extends Equatable {
 /// Inicializa o Firebase com segurança por plataforma, cache offline no Firestore
 /// e suporte opcional ao Firebase Emulator Suite via `--dart-define`.
 class FirebaseBootstrapService {
+  FirebaseBootstrapService({
+    FirebaseOptions Function()? optionsResolver,
+  }) : _optionsResolver = optionsResolver;
+
   static const bool _useEmulator =
       bool.fromEnvironment('USE_FIREBASE_EMULATOR', defaultValue: false);
   static const String _customEmulatorHost =
       String.fromEnvironment('FIREBASE_EMULATOR_HOST', defaultValue: '');
+
+  final FirebaseOptions Function()? _optionsResolver;
 
   Future<FirebaseBootstrapState> initialize() async {
     if (!PlatformInfo.supportsCoreFirebase) {
@@ -62,15 +69,14 @@ class FirebaseBootstrapService {
     }
 
     try {
-      final options = DefaultFirebaseOptions.currentPlatform;
+      final options =
+          _optionsResolver?.call() ?? DefaultFirebaseOptions.currentPlatform;
       final isPlaceholder = options.apiKey.startsWith('REPLACE_WITH_');
       if (isPlaceholder && !_useEmulator) {
         return const FirebaseBootstrapState.awaitingConfiguration();
       }
 
-      final app = Firebase.apps.isEmpty
-          ? await Firebase.initializeApp(options: options)
-          : Firebase.app();
+      final app = await _initializeOrReuseApp(options);
 
       if (_useEmulator) {
         final host = _resolveEmulatorHost();
@@ -79,9 +85,7 @@ class FirebaseBootstrapService {
         await FirebaseStorage.instance.useStorageEmulator(host, 9199);
       }
 
-      FirebaseFirestore.instance.settings = const Settings(
-        persistenceEnabled: true,
-      );
+      await _configureFirestorePersistence();
 
       return FirebaseBootstrapState(
         status: FirebaseConnectionStatus.connected,
@@ -98,6 +102,35 @@ class FirebaseBootstrapService {
         errorDetails: error.toString(),
       );
     }
+  }
+
+  Future<FirebaseApp> _initializeOrReuseApp(FirebaseOptions options) async {
+    try {
+      return await Firebase.initializeApp(options: options);
+    } on FirebaseException catch (error) {
+      if (error.code == 'duplicate-app') {
+        return Firebase.app();
+      }
+      rethrow;
+    }
+  }
+
+  Future<void> _configureFirestorePersistence() async {
+    if (kIsWeb) {
+      try {
+        await FirebaseFirestore.instance.enablePersistence(
+          const PersistenceSettings(synchronizeTabs: true),
+        );
+      } catch (_) {
+        // Navegadores em aba anônima ou múltiplas abas incompatíveis seguem
+        // normalmente com cache em memória sem interromper o Firebase.
+      }
+      return;
+    }
+
+    FirebaseFirestore.instance.settings = const Settings(
+      persistenceEnabled: true,
+    );
   }
 
   String _resolveEmulatorHost() {

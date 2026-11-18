@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../../../core/constants/app_constants.dart';
 import '../../../../core/constants/firestore_collections.dart';
+import '../../../../core/utils/firestore_utils.dart';
 import '../../../authentication/domain/entities/auth_user.dart';
 import '../../domain/entities/user_profile.dart';
 import '../models/user_profile_model.dart';
@@ -58,8 +59,8 @@ class ProfileRemoteDatasource {
       {
         'uid': user.uid,
         'email': user.email,
-        'createdAt': Timestamp.fromDate(now),
-        'updatedAt': Timestamp.fromDate(now),
+        'createdAt': FirestoreUtils.toMillisTimestamp(now),
+        'updatedAt': FirestoreUtils.toMillisTimestamp(now),
       },
       SetOptions(merge: true),
     );
@@ -72,7 +73,7 @@ class ProfileRemoteDatasource {
   Future<void> updateProfile(UserProfile profile) async {
     final updated = profile.copyWith(updatedAt: DateTime.now());
     await _profileDoc(profile.uid).set(
-      UserProfileModel.toFirestore(updated),
+      FirestoreUtils.withoutCreatedAt(UserProfileModel.toFirestore(updated)),
       SetOptions(merge: true),
     );
   }

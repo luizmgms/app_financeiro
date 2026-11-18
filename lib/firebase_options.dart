@@ -2,10 +2,7 @@ import 'package:firebase_core/firebase_core.dart' show FirebaseOptions;
 import 'package:flutter/foundation.dart'
     show TargetPlatform, defaultTargetPlatform, kIsWeb;
 
-/// Arquivo inicial de opções do Firebase.
-///
-/// Substitua este placeholder executando `flutterfire configure` após criar e
-/// vincular o projeto no Firebase Console.
+/// Opções do Firebase geradas para o projeto `finance-control-luizmgms`.
 class DefaultFirebaseOptions {
   static FirebaseOptions get currentPlatform {
     if (kIsWeb) {
@@ -17,7 +14,9 @@ class DefaultFirebaseOptions {
       case TargetPlatform.iOS:
         return ios;
       case TargetPlatform.macOS:
-        return macos;
+        throw UnsupportedError(
+          'DefaultFirebaseOptions não foi configurado para macOS.',
+        );
       case TargetPlatform.windows:
         return windows;
       case TargetPlatform.linux:
@@ -32,39 +31,41 @@ class DefaultFirebaseOptions {
   }
 
   static const FirebaseOptions web = FirebaseOptions(
-    apiKey: 'REPLACE_WITH_FLUTTERFIRE_CONFIGURE',
-    appId: '1:000000000000:web:placeholder',
-    messagingSenderId: '000000000000',
-    projectId: 'finance-control-placeholder',
+    apiKey: 'AIzaSyBCC9uXxFXqbk-v9YlIObQRG1nhfJf9rxk',
+    appId: '1:419399885428:web:4f443b826ff51f9a716721',
+    messagingSenderId: '419399885428',
+    projectId: 'finance-control-luizmgms',
+    authDomain: 'finance-control-luizmgms.firebaseapp.com',
+    storageBucket: 'finance-control-luizmgms.firebasestorage.app',
   );
 
   static const FirebaseOptions android = FirebaseOptions(
-    apiKey: 'REPLACE_WITH_FLUTTERFIRE_CONFIGURE',
-    appId: '1:000000000000:android:placeholder',
-    messagingSenderId: '000000000000',
-    projectId: 'finance-control-placeholder',
+    apiKey: 'AIzaSyB5IfrDf76RnAXsTAMhgemNuuGPbyWJ30w',
+    appId: '1:419399885428:android:853081011691e95e716721',
+    messagingSenderId: '419399885428',
+    projectId: 'finance-control-luizmgms',
+    storageBucket: 'finance-control-luizmgms.firebasestorage.app',
   );
 
   static const FirebaseOptions ios = FirebaseOptions(
-    apiKey: 'REPLACE_WITH_FLUTTERFIRE_CONFIGURE',
-    appId: '1:000000000000:ios:placeholder',
-    messagingSenderId: '000000000000',
-    projectId: 'finance-control-placeholder',
-    iosBundleId: 'br.com.financecontrol.financeControl',
-  );
-
-  static const FirebaseOptions macos = FirebaseOptions(
-    apiKey: 'REPLACE_WITH_FLUTTERFIRE_CONFIGURE',
-    appId: '1:000000000000:ios:placeholder',
-    messagingSenderId: '000000000000',
-    projectId: 'finance-control-placeholder',
+    apiKey: 'AIzaSyAEY-RrWKBPizkA3j0_S-kivZ111qH3NdE',
+    appId: '1:419399885428:ios:9b83d3a909d26d5e716721',
+    messagingSenderId: '419399885428',
+    projectId: 'finance-control-luizmgms',
+    storageBucket: 'finance-control-luizmgms.firebasestorage.app',
+    androidClientId:
+        '419399885428-qv3fmtmdj42kf80v4tp71bu6j6kvse43.apps.googleusercontent.com',
+    iosClientId:
+        '419399885428-2u94t69r8jn6kee052o6hrpmdugfdr3j.apps.googleusercontent.com',
     iosBundleId: 'br.com.financecontrol.financeControl',
   );
 
   static const FirebaseOptions windows = FirebaseOptions(
-    apiKey: 'REPLACE_WITH_FLUTTERFIRE_CONFIGURE',
-    appId: '1:000000000000:web:placeholder',
-    messagingSenderId: '000000000000',
-    projectId: 'finance-control-placeholder',
+    apiKey: 'AIzaSyBCC9uXxFXqbk-v9YlIObQRG1nhfJf9rxk',
+    appId: '1:419399885428:web:4f443b826ff51f9a716721',
+    messagingSenderId: '419399885428',
+    projectId: 'finance-control-luizmgms',
+    authDomain: 'finance-control-luizmgms.firebaseapp.com',
+    storageBucket: 'finance-control-luizmgms.firebasestorage.app',
   );
 }

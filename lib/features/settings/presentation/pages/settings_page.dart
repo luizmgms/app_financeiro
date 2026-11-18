@@ -226,6 +226,15 @@ class SettingsPage extends ConsumerWidget {
                             ),
                           ],
                         ),
+                        if (bootstrap.firebase.errorDetails != null) ...[
+                          const SizedBox(height: 10),
+                          Text(
+                            bootstrap.firebase.errorDetails!,
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: AppColors.expense,
+                            ),
+                          ),
+                        ],
                       ],
                     ),
                   ),

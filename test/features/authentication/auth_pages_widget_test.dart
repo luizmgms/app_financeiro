@@ -3,12 +3,21 @@ import 'dart:async';
 import 'package:finance_control/app/app.dart';
 import 'package:finance_control/core/services/firebase_bootstrap_service.dart';
 import 'package:finance_control/core/services/local_storage_service.dart';
+import 'package:finance_control/features/accounts/application/providers/account_providers.dart';
+import 'package:finance_control/features/accounts/domain/entities/account_entity.dart';
+import 'package:finance_control/features/accounts/domain/repositories/account_repository.dart';
 import 'package:finance_control/features/authentication/application/providers/auth_providers.dart';
 import 'package:finance_control/features/authentication/domain/entities/auth_user.dart';
 import 'package:finance_control/features/authentication/domain/repositories/auth_repository.dart';
+import 'package:finance_control/features/categories/application/providers/category_providers.dart';
+import 'package:finance_control/features/categories/domain/entities/category_entity.dart';
+import 'package:finance_control/features/categories/domain/repositories/category_repository.dart';
 import 'package:finance_control/features/profile/application/providers/profile_providers.dart';
 import 'package:finance_control/features/profile/domain/entities/user_profile.dart';
 import 'package:finance_control/features/profile/domain/repositories/profile_repository.dart';
+import 'package:finance_control/features/transactions/application/providers/transaction_providers.dart';
+import 'package:finance_control/features/transactions/domain/entities/transaction_entity.dart';
+import 'package:finance_control/features/transactions/domain/repositories/transaction_repository.dart';
 import 'package:finance_control/shared/providers/app_bootstrap_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -124,6 +133,36 @@ class _WidgetFakeProfileRepository implements ProfileRepository {
   }
 }
 
+class _WidgetEmptyCategoryRepo implements CategoryRepository {
+  @override
+  Stream<List<CategoryEntity>> watchCategories(String userId) =>
+      Stream.value(const <CategoryEntity>[]);
+
+  @override
+  Future<void> seedDefaultCategoriesIfNeeded(String userId) async {}
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+class _WidgetEmptyAccountRepo implements AccountRepository {
+  @override
+  Stream<List<AccountEntity>> watchAccounts(String userId) =>
+      Stream.value(const <AccountEntity>[]);
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+class _WidgetEmptyTransactionRepo implements TransactionRepository {
+  @override
+  Stream<List<TransactionEntity>> watchTransactions(String userId) =>
+      Stream.value(const <TransactionEntity>[]);
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
 void main() {
   setUpAll(() async {
     await initializeDateFormatting('pt_BR');
@@ -153,6 +192,11 @@ void main() {
           ),
           authRepositoryProvider.overrideWithValue(authRepo),
           profileRepositoryProvider.overrideWithValue(profileRepo),
+          categoryRepositoryProvider.overrideWithValue(_WidgetEmptyCategoryRepo()),
+          accountRepositoryProvider.overrideWithValue(_WidgetEmptyAccountRepo()),
+          transactionRepositoryProvider.overrideWithValue(
+            _WidgetEmptyTransactionRepo(),
+          ),
         ],
         child: const FinanceControlApp(),
       ),
@@ -209,6 +253,11 @@ void main() {
           ),
           authRepositoryProvider.overrideWithValue(authRepo),
           profileRepositoryProvider.overrideWithValue(profileRepo),
+          categoryRepositoryProvider.overrideWithValue(_WidgetEmptyCategoryRepo()),
+          accountRepositoryProvider.overrideWithValue(_WidgetEmptyAccountRepo()),
+          transactionRepositoryProvider.overrideWithValue(
+            _WidgetEmptyTransactionRepo(),
+          ),
         ],
         child: const FinanceControlApp(),
       ),

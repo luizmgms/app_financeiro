@@ -1,0 +1,54 @@
+{
+  "project_info": {
+    "project_number": "419399885428",
+    "project_id": "finance-control-luizmgms",
+    "storage_bucket": "finance-control-luizmgms.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:419399885428:android:853081011691e95e716721",
+        "android_client_info": {
+          "package_name": "br.com.financecontrol.finance_control"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "419399885428-qv3fmtmdj42kf80v4tp71bu6j6kvse43.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "br.com.financecontrol.finance_control",
+            "certificate_hash": "0d96c8fa1ffa2590dd44ce53e92520a5ee910618"
+          }
+        },
+        {
+          "client_id": "419399885428-fruq603ci10puqqc16leud5ormdfcbd7.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyB5IfrDf76RnAXsTAMhgemNuuGPbyWJ30w"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "419399885428-fruq603ci10puqqc16leud5ormdfcbd7.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "419399885428-2u94t69r8jn6kee052o6hrpmdugfdr3j.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "br.com.financecontrol.financeControl"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -6,6 +6,20 @@
   "storage": {
     "rules": "storage.rules"
   },
+  "auth": {
+    "providers": {
+      "anonymous": false,
+      "emailPassword": true,
+      "googleSignIn": {
+        "oAuthBrandDisplayName": "Finance Control",
+        "supportEmail": "luiz.mg.ms@gmail.com",
+        "authorizedRedirectUris": [
+          "https://finance-control-luizmgms.firebaseapp.com/__/auth/handler",
+          "http://localhost:4000"
+        ]
+      }
+    }
+  },
   "emulators": {
     "auth": {
       "port": 9099

@@ -51,7 +51,8 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    expect(find.text('Etapa 2 • Contas e Transferências'), findsOneWidget);
+    expect(find.text('Saldo total em contas ativas'), findsOneWidget);
+    expect(find.text('Nenhuma conta cadastrada'), findsOneWidget);
 
     // Navega para Configurações e altera o tema.
     await tester.tap(

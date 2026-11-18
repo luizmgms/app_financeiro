@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../../../core/constants/app_constants.dart';
+import '../../../../core/utils/firestore_utils.dart';
 import '../../domain/entities/user_profile.dart';
 
 /// Modelo de serialização Firestore para [UserProfile].
@@ -38,8 +39,8 @@ class UserProfileModel {
       'defaultCurrency': profile.defaultCurrency,
       'localeCode': profile.localeCode,
       'monthStartDay': profile.monthStartDay.clamp(1, 28),
-      'createdAt': Timestamp.fromDate(profile.createdAt),
-      'updatedAt': Timestamp.fromDate(profile.updatedAt),
+      'createdAt': FirestoreUtils.toMillisTimestamp(profile.createdAt),
+      'updatedAt': FirestoreUtils.toMillisTimestamp(profile.updatedAt),
     };
   }
 }
