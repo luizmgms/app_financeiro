@@ -249,6 +249,8 @@ class _TransactionFormDialogState extends ConsumerState<TransactionFormDialog> {
     }
 
     return AlertDialog(
+      insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
+      contentPadding: const EdgeInsets.fromLTRB(20, 14, 20, 12),
       title: Text(
         isEditing
             ? 'Editar movimentação'
@@ -259,6 +261,7 @@ class _TransactionFormDialogState extends ConsumerState<TransactionFormDialog> {
       content: SizedBox(
         width: 520,
         child: SingleChildScrollView(
+          padding: const EdgeInsets.only(top: 6),
           child: Form(
             key: _formKey,
             child: Column(
@@ -417,12 +420,17 @@ class _TransactionFormDialogState extends ConsumerState<TransactionFormDialog> {
                 const SizedBox(height: 12),
                 DropdownButtonFormField<TransactionStatus>(
                   value: _status,
+                  isExpanded: true,
                   decoration: const InputDecoration(labelText: 'Status'),
                   items: [
                     for (final item in statusOptions)
                       DropdownMenuItem(
                         value: item,
-                        child: Text(item.label),
+                        child: Text(
+                          item.label,
+                          overflow: TextOverflow.ellipsis,
+                          maxLines: 1,
+                        ),
                       ),
                   ],
                   onChanged: isLoading

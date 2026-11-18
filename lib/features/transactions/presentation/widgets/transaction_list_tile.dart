@@ -8,6 +8,7 @@ import '../../../../core/utils/icon_catalog.dart';
 import '../../../../core/widgets/status_badge.dart';
 import '../../../accounts/domain/entities/account_entity.dart';
 import '../../../categories/domain/entities/category_entity.dart';
+import '../../../credit_cards/domain/entities/credit_card_entity.dart';
 import '../../domain/entities/transaction_attachment.dart';
 import '../../domain/entities/transaction_entity.dart';
 
@@ -19,6 +20,7 @@ class TransactionListTile extends StatelessWidget {
     this.category,
     this.account,
     this.counterpartyAccount,
+    this.card,
     this.locale = 'pt_BR',
     this.currencyCode = 'BRL',
     this.onTap,
@@ -32,6 +34,7 @@ class TransactionListTile extends StatelessWidget {
   final CategoryEntity? category;
   final AccountEntity? account;
   final AccountEntity? counterpartyAccount;
+  final CreditCardEntity? card;
   final String locale;
   final String currencyCode;
   final VoidCallback? onTap;
@@ -138,13 +141,15 @@ class TransactionListTile extends StatelessWidget {
     final theme = Theme.of(context);
     final effStatus = transaction.effectiveStatus();
     final isTransfer = transaction.kind == TransactionKind.transfer;
+    final isCardRefund = transaction.kind == TransactionKind.cardRefund;
     final isInflow = transaction.kind == TransactionKind.income ||
+        isCardRefund ||
         (isTransfer &&
             transaction.transferDirection == TransferDirection.inflow);
 
     final badgeColor = switch (transaction.kind) {
       TransactionKind.transfer => AppColors.transfer,
-      TransactionKind.income => AppColors.income,
+      TransactionKind.income || TransactionKind.cardRefund => AppColors.income,
       TransactionKind.expense ||
       TransactionKind.cardPurchase ||
       TransactionKind.invoicePayment =>
@@ -155,12 +160,14 @@ class TransactionListTile extends StatelessWidget {
 
     final iconData = isTransfer
         ? Icons.swap_horiz_rounded
-        : IconCatalog.resolve(
-            category?.iconName,
-            fallback: isInflow
-                ? Icons.trending_up_rounded
-                : Icons.trending_down_rounded,
-          );
+        : isCardRefund
+            ? Icons.replay_rounded
+            : IconCatalog.resolve(
+                category?.iconName,
+                fallback: isInflow
+                    ? Icons.trending_up_rounded
+                    : Icons.trending_down_rounded,
+              );
 
     final amountColor = isTransfer
         ? AppColors.transfer
@@ -179,13 +186,26 @@ class TransactionListTile extends StatelessWidget {
       TransactionStatus.overdue => AppColors.expense,
     };
 
-    final statusLabel = isTransfer ? 'Transferência' : effStatus.label;
+    final isCardPurchase = transaction.kind == TransactionKind.cardPurchase;
+    final isInvoicePayment = transaction.kind == TransactionKind.invoicePayment;
+    final canEditOrDuplicate = transaction.kind == TransactionKind.income ||
+        transaction.kind == TransactionKind.expense;
+
+    final statusLabel = isTransfer
+        ? 'Transferência'
+        : isInvoicePayment
+            ? 'Fatura Paga'
+            : isCardRefund
+                ? 'Estorno no Cartão'
+                : effStatus.label;
 
     final accountLabel = isTransfer && counterpartyAccount != null
         ? (transaction.transferDirection == TransferDirection.outflow
             ? '${account?.name ?? 'Conta'} -> ${counterpartyAccount!.name}'
             : '${counterpartyAccount!.name} -> ${account?.name ?? 'Conta'}')
-        : (account?.name ?? 'Sem conta');
+        : (isCardPurchase || isCardRefund)
+            ? 'Cartão: ${card?.name ?? 'Cartão de crédito'}'
+            : (account?.name ?? 'Sem conta');
 
     final subtitleParts = <String>[
       if (!isTransfer && category != null) category!.name,
@@ -197,13 +217,12 @@ class TransactionListTile extends StatelessWidget {
 
     final canSettle = !isTransfer &&
         !effStatus.isSettled &&
-        (transaction.kind == TransactionKind.income ||
-            transaction.kind == TransactionKind.expense) &&
+        canEditOrDuplicate &&
         onMarkAsSettled != null;
 
     return Card(
       child: InkWell(
-        onTap: onTap ?? onEdit,
+        onTap: onTap ?? (canEditOrDuplicate ? onEdit : null),
         borderRadius: BorderRadius.circular(18),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
@@ -248,6 +267,18 @@ class TransactionListTile extends StatelessWidget {
                       crossAxisAlignment: WrapCrossAlignment.center,
                       children: [
                         StatusBadge(label: statusLabel, color: statusColor),
+                        if (isCardPurchase)
+                          const StatusBadge(
+                            label: 'Cartão',
+                            color: AppColors.credit,
+                            icon: Icons.credit_card_rounded,
+                          ),
+                        if ((transaction.totalInstallments ?? 1) > 1)
+                          StatusBadge(
+                            label:
+                                '${transaction.installmentNumber}/${transaction.totalInstallments}',
+                            color: AppColors.primaryLight,
+                          ),
                         if (transaction.attachments.isNotEmpty)
                           InkWell(
                             onTap: () => _showAttachmentsSheet(context),
@@ -293,9 +324,9 @@ class TransactionListTile extends StatelessWidget {
                             size: 20,
                           ),
                         ),
-                      if (onEdit != null ||
-                          onDuplicate != null ||
-                          onDelete != null)
+                      if ((canEditOrDuplicate &&
+                              (onEdit != null || onDuplicate != null)) ||
+                          (!isInvoicePayment && onDelete != null))
                         PopupMenuButton<String>(
                           padding: EdgeInsets.zero,
                           iconSize: 20,
@@ -325,17 +356,17 @@ class TransactionListTile extends StatelessWidget {
                                       : 'Confirmar pagamento',
                                 ),
                               ),
-                            if (!isTransfer && onEdit != null)
+                            if (canEditOrDuplicate && onEdit != null)
                               const PopupMenuItem(
                                 value: 'edit',
                                 child: Text('Editar'),
                               ),
-                            if (!isTransfer && onDuplicate != null)
+                            if (canEditOrDuplicate && onDuplicate != null)
                               const PopupMenuItem(
                                 value: 'duplicate',
                                 child: Text('Duplicar'),
                               ),
-                            if (onDelete != null)
+                            if (!isInvoicePayment && onDelete != null)
                               const PopupMenuItem(
                                 value: 'delete',
                                 child: Text('Excluir'),

@@ -4,6 +4,9 @@ import '../../../../core/errors/failures.dart';
 import '../../../../core/services/attachment_storage_service.dart';
 import '../../../../core/utils/firestore_utils.dart';
 import '../../../accounts/data/models/account_model.dart';
+import '../../../credit_cards/data/models/credit_card_model.dart';
+import '../../../credit_cards/data/models/invoice_model.dart';
+import '../../../credit_cards/domain/entities/invoice_entity.dart';
 import '../../domain/entities/transaction_attachment.dart';
 import '../../domain/entities/transaction_entity.dart';
 import '../models/transaction_model.dart';
@@ -311,7 +314,72 @@ class TransactionRemoteDatasource {
       if (!snap.exists) return;
 
       final existing = TransactionModel.fromFirestore(snap);
+      if (existing.kind == TransactionKind.invoicePayment) {
+        throw const ValidationFailure(
+          'Pagamentos de fatura consolidados não podem ser excluídos diretamente.',
+        );
+      }
+
       attachmentsToDelete = existing.attachments;
+      final now = DateTime.now();
+
+      if (existing.kind == TransactionKind.cardPurchase ||
+          existing.kind == TransactionKind.cardRefund) {
+        final isRefund = existing.kind == TransactionKind.cardRefund;
+        if (existing.status.isSettled) {
+          throw const ValidationFailure(
+            'Não é possível excluir um lançamento de uma fatura já paga.',
+          );
+        }
+
+        DocumentReference<Map<String, dynamic>>? cardRef;
+        DocumentSnapshot<Map<String, dynamic>>? cardSnap;
+        if (existing.cardId != null && existing.cardId!.isNotEmpty) {
+          cardRef = _userDoc(userId)
+              .collection(FirestoreCollections.creditCards)
+              .doc(existing.cardId!);
+          cardSnap = await tx.get(cardRef);
+        }
+
+        DocumentReference<Map<String, dynamic>>? invoiceRef;
+        DocumentSnapshot<Map<String, dynamic>>? invoiceSnap;
+        if (existing.invoiceId != null && existing.invoiceId!.isNotEmpty) {
+          invoiceRef = _userDoc(userId)
+              .collection(FirestoreCollections.invoices)
+              .doc(existing.invoiceId!);
+          invoiceSnap = await tx.get(invoiceRef);
+        }
+
+        tx.delete(docRef);
+
+        if (invoiceRef != null && invoiceSnap != null && invoiceSnap.exists) {
+          final invoice = InvoiceModel.fromFirestore(invoiceSnap);
+          if (invoice.status == InvoiceStatus.paid) {
+            throw const ValidationFailure(
+              'Não é possível excluir um lançamento de uma fatura já paga.',
+            );
+          }
+          final nextTotal = isRefund
+              ? invoice.totalAmountCents + existing.amountCents
+              : invoice.totalAmountCents - existing.amountCents;
+          tx.update(invoiceRef, <String, dynamic>{
+            'totalAmountCents': nextTotal < 0 ? 0 : nextTotal,
+            'updatedAt': FirestoreUtils.toMillisTimestamp(now),
+          });
+        }
+
+        if (cardRef != null && cardSnap != null && cardSnap.exists) {
+          final card = CreditCardModel.fromFirestore(cardSnap);
+          final nextUsed = isRefund
+              ? card.usedLimitCents + existing.amountCents
+              : card.usedLimitCents - existing.amountCents;
+          tx.update(cardRef, <String, dynamic>{
+            'usedLimitCents': nextUsed < 0 ? 0 : nextUsed,
+            'updatedAt': FirestoreUtils.toMillisTimestamp(now),
+          });
+        }
+        return;
+      }
 
       final accountId = existing.accountId;
       final delta = accountId == null
@@ -330,7 +398,7 @@ class TransactionRemoteDatasource {
         final account = AccountModel.fromFirestore(accountSnap);
         tx.update(accountRef, <String, dynamic>{
           'currentBalanceCents': account.currentBalanceCents - delta,
-          'updatedAt': FirestoreUtils.toMillisTimestamp(DateTime.now()),
+          'updatedAt': FirestoreUtils.toMillisTimestamp(now),
         });
       }
     });

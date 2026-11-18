@@ -17,6 +17,8 @@ import '../../../accounts/application/providers/account_providers.dart';
 import '../../../accounts/presentation/widgets/transfer_form_dialog.dart';
 import '../../../authentication/application/providers/auth_providers.dart';
 import '../../../categories/application/providers/category_providers.dart';
+import '../../../credit_cards/application/providers/credit_card_providers.dart';
+import '../../../credit_cards/presentation/widgets/card_purchase_form_dialog.dart';
 import '../../../profile/application/providers/profile_providers.dart';
 import '../../../transactions/application/controllers/transaction_controller.dart';
 import '../../../transactions/application/providers/transaction_providers.dart';
@@ -79,6 +81,10 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
     final activeAccounts = ref.watch(activeAccountsProvider);
     final accountsMap = ref.watch(accountsByIdProvider);
     final categoriesMap = ref.watch(categoriesByIdProvider);
+    final activeCards = ref.watch(activeCreditCardsProvider);
+    final cardsMap = ref.watch(creditCardsByIdProvider);
+    final totalOpenInvoicesCents =
+        ref.watch(totalOpenInvoicesAmountCentsProvider);
     final totalBalanceCents = ref.watch(totalAvailableBalanceCentsProvider);
     final allTransactions =
         ref.watch(transactionsStreamProvider).valueOrNull ?? const [];
@@ -185,6 +191,15 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                         ),
                         label: const Text('Nova despesa'),
                       ),
+                      if (activeCards.isNotEmpty)
+                        FilledButton.tonalIcon(
+                          onPressed: () => showCardPurchaseFormDialog(context),
+                          icon: const Icon(
+                            Icons.credit_card_rounded,
+                            color: AppColors.credit,
+                          ),
+                          label: const Text('Compra no cartão'),
+                        ),
                       if (activeAccounts.length >= 2)
                         OutlinedButton.icon(
                           onPressed: () => showTransferFormDialog(context),
@@ -274,8 +289,9 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                           child: SummaryMetricCard(
                             title: 'Saldo projetado',
                             valueText: fmt(projectedBalanceCents),
-                            subtitle:
-                                'Considera receitas e despesas pendentes do período',
+                            subtitle: totalOpenInvoicesCents > 0
+                                ? 'Faturas em aberto: ${fmt(totalOpenInvoicesCents)}'
+                                : 'Considera receitas e despesas pendentes do período',
                             icon: Icons.auto_graph_rounded,
                             accentColor: AppColors.credit,
                           ),
@@ -348,6 +364,10 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                                         ? null
                                         : accountsMap[recentTransactions[i]
                                             .destinationAccountId!],
+                                    card: recentTransactions[i].cardId == null
+                                        ? null
+                                        : cardsMap[
+                                            recentTransactions[i].cardId!],
                                     locale: locale,
                                     currencyCode: currency,
                                     onMarkAsSettled: () => ref

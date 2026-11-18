@@ -120,10 +120,13 @@ class _AccountFormDialogState extends ConsumerState<AccountFormDialog> {
     final accent = ColorUtils.fromHex(_colorHex);
 
     return AlertDialog(
+      insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
+      contentPadding: const EdgeInsets.fromLTRB(20, 14, 20, 12),
       title: Text(isEditing ? 'Editar conta' : 'Nova conta'),
       content: SizedBox(
         width: 460,
         child: SingleChildScrollView(
+          padding: const EdgeInsets.only(top: 6),
           child: Form(
             key: _formKey,
             child: Column(
@@ -174,12 +177,17 @@ class _AccountFormDialogState extends ConsumerState<AccountFormDialog> {
                 const SizedBox(height: 10),
                 DropdownButtonFormField<AccountType>(
                   value: _type,
+                  isExpanded: true,
                   decoration: const InputDecoration(labelText: 'Tipo de conta'),
                   items: [
                     for (final item in AccountType.values)
                       DropdownMenuItem(
                         value: item,
-                        child: Text(item.label),
+                        child: Text(
+                          item.label,
+                          overflow: TextOverflow.ellipsis,
+                          maxLines: 1,
+                        ),
                       ),
                   ],
                   onChanged: isLoading

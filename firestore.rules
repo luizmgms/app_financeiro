@@ -5,8 +5,8 @@ rules_version = '2';
 // ===============================================================
 //
 // This security rules file enforces strict per-user isolation and
-// schema validation for Finance Control (Etapa 1 & Etapa 2), while
-// preserving placeholder rules for upcoming feature collections.
+// schema validation for Finance Control (Etapa 1, Etapa 2 & Etapa 3),
+// while preserving placeholder rules for upcoming feature collections.
 //
 // Collection: users
 // Document ID: {userId} (must match request.auth.uid)
@@ -61,7 +61,7 @@ rules_version = '2';
 // Subcollection: users/{userId}/transactions
 // Document ID: {transactionId}
 // Required Fields:
-//   - kind: string ('income' | 'expense' | 'transfer' | 'card_purchase' | 'invoice_payment')
+//   - kind: string ('income' | 'expense' | 'transfer' | 'card_purchase' | 'card_refund' | 'invoice_payment')
 //   - description: string (1..120 chars)
 //   - amountCents: int (> 0)
 //   - competencyDate: timestamp
@@ -86,6 +86,58 @@ rules_version = '2';
 //   - totalInstallments: int (>= 0) | null
 //   - recurringId: string (<= 128) | null
 //   - occurrenceKey: string (<= 128) | null
+//
+// Subcollection: users/{userId}/credit_cards
+// Document ID: {cardId}
+// Required Fields:
+//   - name: string (1..60 chars)
+//   - institution: string (0..80 chars)
+//   - brand: string ('visa' | 'mastercard' | 'elo' | 'amex' | 'hipercard' | 'other')
+//   - totalLimitCents: int (>= 0)
+//   - usedLimitCents: int (>= 0)
+//   - closingDay: int (1..31)
+//   - dueDay: int (1..31)
+//   - colorHex: string (4..9 chars)
+//   - defaultInstallments: int (1..48)
+//   - isActive: bool
+//   - createdAt: timestamp (immutable)
+//   - updatedAt: timestamp
+// Optional / Nullable Fields:
+//   - paymentAccountId: string (<= 128) | null
+//
+// Subcollection: users/{userId}/invoices
+// Document ID: {invoiceId} (e.g. {cardId}_{YYYY}_{MM})
+// Required Fields:
+//   - cardId: string (1..128 chars)
+//   - referenceYear: int (2000..2200)
+//   - referenceMonth: int (1..12)
+//   - closingDate: timestamp
+//   - dueDate: timestamp
+//   - totalAmountCents: int (>= 0)
+//   - paidAmountCents: int (>= 0)
+//   - status: string ('open' | 'closed' | 'paid' | 'overdue')
+//   - createdAt: timestamp (immutable)
+//   - updatedAt: timestamp
+// Optional / Nullable Fields:
+//   - paymentTransactionId: string (<= 128) | null
+//   - paidAt: timestamp | null
+//
+// Subcollection: users/{userId}/installments
+// Document ID: {installmentId}
+// Required Fields:
+//   - description: string (1..120 chars)
+//   - totalAmountCents: int (> 0)
+//   - installmentCount: int (1..48)
+//   - firstCompetencyDate: timestamp
+//   - firstDueDate: timestamp
+//   - categoryId: string (1..128 chars)
+//   - status: string ('active' | 'completed' | 'canceled')
+//   - createdAt: timestamp (immutable)
+//   - updatedAt: timestamp
+// Optional / Nullable Fields:
+//   - cardId: string (<= 128) | null
+//   - accountId: string (<= 128) | null
+//   - notes: string (<= 500) | null
 //
 // ===============================================================
 
@@ -382,7 +434,7 @@ service cloud.firestore {
             'updatedAt'
           ])
           && data.kind is string
-          && data.kind in ['income', 'expense', 'transfer', 'card_purchase', 'invoice_payment']
+          && data.kind in ['income', 'expense', 'transfer', 'card_purchase', 'card_refund', 'invoice_payment']
           && validStringLength(data, 'description', 1, 120)
           && data.amountCents is int
           && data.amountCents > 0
@@ -408,6 +460,135 @@ service cloud.firestore {
           && isValidNullableNonNegativeInt(data, 'totalInstallments')
           && isValidNullableString(data, 'recurringId', 128)
           && isValidNullableString(data, 'occurrenceKey', 128);
+    }
+
+    function isValidCreditCard(data) {
+      return hasRequiredFields(data, [
+            'name',
+            'institution',
+            'brand',
+            'totalLimitCents',
+            'usedLimitCents',
+            'closingDay',
+            'dueDay',
+            'colorHex',
+            'defaultInstallments',
+            'isActive',
+            'createdAt',
+            'updatedAt'
+          ])
+          && hasOnlyAllowedFields(data, [
+            'name',
+            'institution',
+            'brand',
+            'totalLimitCents',
+            'usedLimitCents',
+            'closingDay',
+            'dueDay',
+            'paymentAccountId',
+            'colorHex',
+            'defaultInstallments',
+            'isActive',
+            'createdAt',
+            'updatedAt'
+          ])
+          && validStringLength(data, 'name', 1, 60)
+          && validStringLength(data, 'institution', 0, 80)
+          && data.brand is string
+          && data.brand in ['visa', 'mastercard', 'elo', 'amex', 'hipercard', 'other']
+          && data.totalLimitCents is int && data.totalLimitCents >= 0
+          && data.usedLimitCents is int && data.usedLimitCents >= 0
+          && data.closingDay is int && data.closingDay >= 1 && data.closingDay <= 31
+          && data.dueDay is int && data.dueDay >= 1 && data.dueDay <= 31
+          && isValidNullableString(data, 'paymentAccountId', 128)
+          && validStringLength(data, 'colorHex', 4, 9)
+          && data.defaultInstallments is int && data.defaultInstallments >= 1 && data.defaultInstallments <= 48
+          && data.isActive is bool
+          && data.createdAt is timestamp
+          && data.updatedAt is timestamp;
+    }
+
+    function isValidInvoice(data) {
+      return hasRequiredFields(data, [
+            'cardId',
+            'referenceYear',
+            'referenceMonth',
+            'closingDate',
+            'dueDate',
+            'totalAmountCents',
+            'paidAmountCents',
+            'status',
+            'createdAt',
+            'updatedAt'
+          ])
+          && hasOnlyAllowedFields(data, [
+            'cardId',
+            'referenceYear',
+            'referenceMonth',
+            'closingDate',
+            'dueDate',
+            'totalAmountCents',
+            'paidAmountCents',
+            'status',
+            'paymentTransactionId',
+            'paidAt',
+            'createdAt',
+            'updatedAt'
+          ])
+          && validStringLength(data, 'cardId', 1, 128)
+          && data.referenceYear is int && data.referenceYear >= 2000 && data.referenceYear <= 2200
+          && data.referenceMonth is int && data.referenceMonth >= 1 && data.referenceMonth <= 12
+          && data.closingDate is timestamp
+          && data.dueDate is timestamp
+          && data.totalAmountCents is int && data.totalAmountCents >= 0
+          && data.paidAmountCents is int && data.paidAmountCents >= 0
+          && data.status is string
+          && data.status in ['open', 'closed', 'paid', 'overdue']
+          && isValidNullableString(data, 'paymentTransactionId', 128)
+          && isValidNullableTimestamp(data, 'paidAt')
+          && data.createdAt is timestamp
+          && data.updatedAt is timestamp;
+    }
+
+    function isValidInstallmentPlan(data) {
+      return hasRequiredFields(data, [
+            'description',
+            'totalAmountCents',
+            'installmentCount',
+            'firstCompetencyDate',
+            'firstDueDate',
+            'categoryId',
+            'status',
+            'createdAt',
+            'updatedAt'
+          ])
+          && hasOnlyAllowedFields(data, [
+            'description',
+            'totalAmountCents',
+            'installmentCount',
+            'firstCompetencyDate',
+            'firstDueDate',
+            'cardId',
+            'accountId',
+            'categoryId',
+            'notes',
+            'status',
+            'createdAt',
+            'updatedAt'
+          ])
+          && validStringLength(data, 'description', 1, 120)
+          && data.totalAmountCents is int && data.totalAmountCents > 0
+          && data.installmentCount is int && data.installmentCount >= 1 && data.installmentCount <= 48
+          && data.firstCompetencyDate is timestamp
+          && data.firstDueDate is timestamp
+          && isValidNullableString(data, 'cardId', 128)
+          && isValidNullableString(data, 'accountId', 128)
+          && validStringLength(data, 'categoryId', 1, 128)
+          && isValidNullableString(data, 'notes', 500)
+          && data.status is string
+          && data.status in ['active', 'completed', 'canceled']
+          && data.createdAt is timestamp
+          && data.updatedAt is timestamp;
     }
 
     // ===============================================================
@@ -462,36 +643,42 @@ service cloud.firestore {
             && areImmutableFieldsUnchanged(['createdAt']);
       }
 
-      // =============================================================
-      // Future Feature Collections (Preserved Rules)
-      // =============================================================
-
       match /credit_cards/{cardId} {
         allow read, delete: if isOwner(userId);
-        allow create, update: if isOwner(userId)
-            && request.resource.data.totalLimitCents is int
-            && request.resource.data.totalLimitCents >= 0;
+        allow create: if isOwner(userId)
+            && isValidCreditCard(request.resource.data);
+        allow update: if isOwner(userId)
+            && isValidCreditCard(request.resource.data)
+            && areImmutableFieldsUnchanged(['createdAt']);
       }
 
       match /invoices/{invoiceId} {
         allow read, delete: if isOwner(userId);
-        allow create, update: if isOwner(userId)
-            && request.resource.data.totalAmountCents is int
-            && request.resource.data.paidAmountCents is int;
+        allow create: if isOwner(userId)
+            && isValidInvoice(request.resource.data);
+        allow update: if isOwner(userId)
+            && isValidInvoice(request.resource.data)
+            && areImmutableFieldsUnchanged(['createdAt']);
       }
+
+      match /installments/{installmentId} {
+        allow read, delete: if isOwner(userId);
+        allow create: if isOwner(userId)
+            && isValidInstallmentPlan(request.resource.data);
+        allow update: if isOwner(userId)
+            && isValidInstallmentPlan(request.resource.data)
+            && areImmutableFieldsUnchanged(['createdAt']);
+      }
+
+      // =============================================================
+      // Future Feature Collections (Preserved Rules)
+      // =============================================================
 
       match /recurring/{recurringId} {
         allow read, delete: if isOwner(userId);
         allow create, update: if isOwner(userId)
             && request.resource.data.amountCents is int
             && request.resource.data.amountCents > 0;
-      }
-
-      match /installments/{installmentId} {
-        allow read, delete: if isOwner(userId);
-        allow create, update: if isOwner(userId)
-            && request.resource.data.totalAmountCents is int
-            && request.resource.data.totalAmountCents > 0;
       }
 
       match /budgets/{budgetId} {

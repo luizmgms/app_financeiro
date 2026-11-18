@@ -43,6 +43,13 @@ class TransactionPeriodSummary extends Equatable {
         } else {
           pendingIncome += tx.amountCents;
         }
+      } else if (tx.kind == TransactionKind.cardRefund) {
+        totalExpense -= tx.amountCents;
+        if (effStatus == TransactionStatus.paid || effStatus.isSettled) {
+          paidExpense -= tx.amountCents;
+        } else {
+          pendingExpense -= tx.amountCents;
+        }
       } else {
         totalExpense += tx.amountCents;
         if (effStatus == TransactionStatus.paid || effStatus.isSettled) {
@@ -55,11 +62,11 @@ class TransactionPeriodSummary extends Equatable {
 
     return TransactionPeriodSummary(
       totalIncomeCents: totalIncome,
-      totalExpenseCents: totalExpense,
+      totalExpenseCents: totalExpense < 0 ? 0 : totalExpense,
       receivedIncomeCents: receivedIncome,
-      paidExpenseCents: paidExpense,
+      paidExpenseCents: paidExpense < 0 ? 0 : paidExpense,
       pendingIncomeCents: pendingIncome,
-      pendingExpenseCents: pendingExpense,
+      pendingExpenseCents: pendingExpense < 0 ? 0 : pendingExpense,
     );
   }
 

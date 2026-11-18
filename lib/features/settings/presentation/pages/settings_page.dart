@@ -101,21 +101,41 @@ class SettingsPage extends ConsumerWidget {
                         ),
                         const SizedBox(height: 12),
                         SegmentedButton<ThemeMode>(
+                          showSelectedIcon: false,
+                          style: const ButtonStyle(
+                            visualDensity: VisualDensity.compact,
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                            padding: MaterialStatePropertyAll(
+                              EdgeInsets.symmetric(horizontal: 10),
+                            ),
+                          ),
                           segments: const [
                             ButtonSegment(
                               value: ThemeMode.system,
-                              icon: Icon(Icons.brightness_auto_outlined),
-                              label: Text('Sistema'),
+                              icon: Icon(Icons.brightness_auto_outlined, size: 16),
+                              label: Text(
+                                'Sistema',
+                                maxLines: 1,
+                                softWrap: false,
+                              ),
                             ),
                             ButtonSegment(
                               value: ThemeMode.light,
-                              icon: Icon(Icons.light_mode_outlined),
-                              label: Text('Claro'),
+                              icon: Icon(Icons.light_mode_outlined, size: 16),
+                              label: Text(
+                                'Claro',
+                                maxLines: 1,
+                                softWrap: false,
+                              ),
                             ),
                             ButtonSegment(
                               value: ThemeMode.dark,
-                              icon: Icon(Icons.dark_mode_outlined),
-                              label: Text('Escuro'),
+                              icon: Icon(Icons.dark_mode_outlined, size: 16),
+                              label: Text(
+                                'Escuro',
+                                maxLines: 1,
+                                softWrap: false,
+                              ),
                             ),
                           ],
                           selected: {themeMode},

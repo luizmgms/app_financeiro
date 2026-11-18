@@ -7,6 +7,7 @@ enum TransactionKind {
   expense('expense', 'Despesa'),
   transfer('transfer', 'Transferência'),
   cardPurchase('card_purchase', 'Compra no cartão'),
+  cardRefund('card_refund', 'Estorno no cartão'),
   invoicePayment('invoice_payment', 'Pagamento de fatura');
 
   const TransactionKind(this.storageValue, this.label);
@@ -17,13 +18,17 @@ enum TransactionKind {
   /// Transferências e pagamentos de fatura nunca entram como receita ou despesa
   /// nos relatórios, evitando dupla contagem.
   bool get countsAsIncomeOrExpense =>
-      this == income || this == expense || this == cardPurchase;
+      this == income ||
+      this == expense ||
+      this == cardPurchase ||
+      this == cardRefund;
 
   static TransactionKind fromStorage(String? value) {
     return switch (value) {
       'income' => TransactionKind.income,
       'transfer' => TransactionKind.transfer,
       'card_purchase' => TransactionKind.cardPurchase,
+      'card_refund' => TransactionKind.cardRefund,
       'invoice_payment' => TransactionKind.invoicePayment,
       _ => TransactionKind.expense,
     };
@@ -138,7 +143,7 @@ class TransactionEntity extends Equatable {
       TransactionKind.transfer ||
       TransactionKind.invoicePayment =>
         true,
-      TransactionKind.cardPurchase => false,
+      TransactionKind.cardPurchase || TransactionKind.cardRefund => false,
     };
   }
 
@@ -170,7 +175,7 @@ class TransactionEntity extends Equatable {
         transferDirection == TransferDirection.inflow
             ? amountCents
             : -amountCents,
-      TransactionKind.cardPurchase => 0,
+      TransactionKind.cardPurchase || TransactionKind.cardRefund => 0,
     };
   }
 

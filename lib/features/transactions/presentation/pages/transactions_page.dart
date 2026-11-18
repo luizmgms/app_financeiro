@@ -11,6 +11,8 @@ import '../../../../shared/widgets/summary_metric_card.dart';
 import '../../../accounts/application/providers/account_providers.dart';
 import '../../../accounts/presentation/widgets/transfer_form_dialog.dart';
 import '../../../categories/application/providers/category_providers.dart';
+import '../../../credit_cards/application/providers/credit_card_providers.dart';
+import '../../../credit_cards/presentation/widgets/card_purchase_form_dialog.dart';
 import '../../../profile/application/providers/profile_providers.dart';
 import '../../application/controllers/transaction_controller.dart';
 import '../../application/providers/transaction_providers.dart';
@@ -132,6 +134,8 @@ class _TransactionsPageState extends ConsumerState<TransactionsPage> {
     final accounts = ref.watch(accountsStreamProvider).valueOrNull ?? const [];
     final accountsMap = ref.watch(accountsByIdProvider);
     final activeAccountsCount = ref.watch(activeAccountsProvider).length;
+    final cardsMap = ref.watch(creditCardsByIdProvider);
+    final activeCardsCount = ref.watch(activeCreditCardsProvider).length;
     final profile = ref.watch(userProfileProvider).valueOrNull;
 
     final locale = profile?.localeCode ?? 'pt_BR';
@@ -233,6 +237,16 @@ class _TransactionsPageState extends ConsumerState<TransactionsPage> {
                                 ),
                                 label: const Text('Lançamento rápido: Despesa'),
                               ),
+                              if (activeCardsCount > 0)
+                                FilledButton.tonalIcon(
+                                  onPressed: () =>
+                                      showCardPurchaseFormDialog(context),
+                                  icon: const Icon(
+                                    Icons.credit_card_rounded,
+                                    color: AppColors.credit,
+                                  ),
+                                  label: const Text('Compra no cartão'),
+                                ),
                               if (activeAccountsCount >= 2)
                                 OutlinedButton.icon(
                                   onPressed: () =>
@@ -400,6 +414,11 @@ class _TransactionsPageState extends ConsumerState<TransactionsPage> {
                                             DropdownMenuItem<TransactionKind?>(
                                               value: TransactionKind.income,
                                               child: Text('Receitas'),
+                                            ),
+                                            DropdownMenuItem<TransactionKind?>(
+                                              value:
+                                                  TransactionKind.cardPurchase,
+                                              child: Text('Cartão de Crédito'),
                                             ),
                                             DropdownMenuItem<TransactionKind?>(
                                               value: TransactionKind.transfer,
@@ -587,6 +606,9 @@ class _TransactionsPageState extends ConsumerState<TransactionsPage> {
                             counterpartyAccount: tx.destinationAccountId == null
                                 ? null
                                 : accountsMap[tx.destinationAccountId!],
+                            card: tx.cardId == null
+                                ? null
+                                : cardsMap[tx.cardId!],
                             locale: locale,
                             currencyCode: currency,
                             onMarkAsSettled: () => ref
