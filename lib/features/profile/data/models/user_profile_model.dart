@@ -24,7 +24,12 @@ class UserProfileModel {
       defaultCurrency:
           (data['defaultCurrency'] as String?) ?? AppConstants.defaultCurrency,
       localeCode: (data['localeCode'] as String?) ?? AppConstants.defaultLocale,
-      monthStartDay: ((data['monthStartDay'] as int?) ?? 1).clamp(1, 28),
+      monthStartDay: ((data['monthStartDay'] as num?)?.toInt() ?? 1).clamp(1, 28),
+      reminderDaysBefore:
+          ((data['reminderDaysBefore'] as num?)?.toInt() ?? 3).clamp(1, 30),
+      notificationsEnabled: (data['notificationsEnabled'] as bool?) ?? true,
+      pushNotificationsEnabled:
+          (data['pushNotificationsEnabled'] as bool?) ?? false,
       createdAt: createdRaw is Timestamp ? createdRaw.toDate() : now,
       updatedAt: updatedRaw is Timestamp ? updatedRaw.toDate() : now,
     );
@@ -39,6 +44,9 @@ class UserProfileModel {
       'defaultCurrency': profile.defaultCurrency,
       'localeCode': profile.localeCode,
       'monthStartDay': profile.monthStartDay.clamp(1, 28),
+      'reminderDaysBefore': profile.reminderDaysBefore.clamp(1, 30),
+      'notificationsEnabled': profile.notificationsEnabled,
+      'pushNotificationsEnabled': profile.pushNotificationsEnabled,
       'createdAt': FirestoreUtils.toMillisTimestamp(profile.createdAt),
       'updatedAt': FirestoreUtils.toMillisTimestamp(profile.updatedAt),
     };

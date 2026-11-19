@@ -11,6 +11,9 @@ class UserProfile extends Equatable {
     this.defaultCurrency = AppConstants.defaultCurrency,
     this.localeCode = AppConstants.defaultLocale,
     this.monthStartDay = AppConstants.defaultMonthStartDay,
+    this.reminderDaysBefore = 3,
+    this.notificationsEnabled = true,
+    this.pushNotificationsEnabled = false,
     required this.createdAt,
     required this.updatedAt,
   });
@@ -22,6 +25,9 @@ class UserProfile extends Equatable {
   final String defaultCurrency;
   final String localeCode;
   final int monthStartDay;
+  final int reminderDaysBefore;
+  final bool notificationsEnabled;
+  final bool pushNotificationsEnabled;
   final DateTime createdAt;
   final DateTime updatedAt;
 
@@ -32,6 +38,9 @@ class UserProfile extends Equatable {
     String? defaultCurrency,
     String? localeCode,
     int? monthStartDay,
+    int? reminderDaysBefore,
+    bool? notificationsEnabled,
+    bool? pushNotificationsEnabled,
     DateTime? updatedAt,
   }) {
     return UserProfile(
@@ -42,6 +51,10 @@ class UserProfile extends Equatable {
       defaultCurrency: defaultCurrency ?? this.defaultCurrency,
       localeCode: localeCode ?? this.localeCode,
       monthStartDay: monthStartDay ?? this.monthStartDay,
+      reminderDaysBefore: reminderDaysBefore ?? this.reminderDaysBefore,
+      notificationsEnabled: notificationsEnabled ?? this.notificationsEnabled,
+      pushNotificationsEnabled:
+          pushNotificationsEnabled ?? this.pushNotificationsEnabled,
       createdAt: createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
     );
@@ -56,6 +69,9 @@ class UserProfile extends Equatable {
         defaultCurrency,
         localeCode,
         monthStartDay,
+        reminderDaysBefore,
+        notificationsEnabled,
+        pushNotificationsEnabled,
         createdAt,
         updatedAt,
       ];

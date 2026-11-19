@@ -279,6 +279,13 @@ class TransactionListTile extends StatelessWidget {
                                 '${transaction.installmentNumber}/${transaction.totalInstallments}',
                             color: AppColors.primaryLight,
                           ),
+                        if (transaction.recurringId != null &&
+                            transaction.recurringId!.isNotEmpty)
+                          const StatusBadge(
+                            label: 'Recorrente',
+                            color: AppColors.transfer,
+                            icon: Icons.repeat_rounded,
+                          ),
                         if (transaction.attachments.isNotEmpty)
                           InkWell(
                             onTap: () => _showAttachmentsSheet(context),

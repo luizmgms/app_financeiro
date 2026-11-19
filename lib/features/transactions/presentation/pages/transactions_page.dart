@@ -254,6 +254,12 @@ class _TransactionsPageState extends ConsumerState<TransactionsPage> {
                                   icon: const Icon(Icons.swap_horiz_rounded),
                                   label: const Text('Transferência'),
                                 ),
+                              OutlinedButton.icon(
+                                onPressed: () =>
+                                    context.push(AppRoutes.recurring),
+                                icon: const Icon(Icons.repeat_rounded),
+                                label: const Text('Recorrentes'),
+                              ),
                             ],
                           ),
                           const SizedBox(height: 14),

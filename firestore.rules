@@ -5,7 +5,7 @@ rules_version = '2';
 // ===============================================================
 //
 // This security rules file enforces strict per-user isolation and
-// schema validation for Finance Control (Etapa 1, Etapa 2 & Etapa 3),
+// schema validation for Finance Control (Etapas 1, 2, 3 & 4),
 // while preserving placeholder rules for upcoming feature collections.
 //
 // Collection: users
@@ -27,6 +27,9 @@ rules_version = '2';
 //   - defaultCurrency: string (required, exactly 3 chars, e.g., 'BRL')
 //   - localeCode: string (required, 2..20 chars, e.g., 'pt_BR')
 //   - monthStartDay: int (required, 1..28)
+//   - reminderDaysBefore: int (optional, 1..30)
+//   - notificationsEnabled: bool (optional)
+//   - pushNotificationsEnabled: bool (optional)
 //   - createdAt: timestamp (optional, immutable once set)
 //   - updatedAt: timestamp (optional)
 //
@@ -138,6 +141,50 @@ rules_version = '2';
 //   - cardId: string (<= 128) | null
 //   - accountId: string (<= 128) | null
 //   - notes: string (<= 500) | null
+//
+// Subcollection: users/{userId}/recurring
+// Document ID: {recurringId}
+// Required Fields:
+//   - description: string (1..120 chars)
+//   - kind: string ('income' | 'expense')
+//   - amountCents: int (> 0)
+//   - isVariableAmount: bool
+//   - categoryId: string (1..128 chars)
+//   - frequency: string ('daily' | 'weekly' | 'biweekly' | 'monthly' | 'bimonthly' | 'quarterly' | 'semiannual' | 'annual' | 'custom')
+//   - startDate: timestamp
+//   - status: string ('active' | 'paused' | 'canceled')
+//   - createdAt: timestamp (immutable)
+//   - updatedAt: timestamp
+// Optional / Nullable Fields:
+//   - accountId: string (<= 128) | null
+//   - cardId: string (<= 128) | null
+//   - customIntervalDays: int (1..3650) | null
+//   - endDate: timestamp | null
+//   - lastGeneratedKey: string (<= 128) | null
+//   - skippedOccurrenceKeys: list (<= 200 items, optional)
+//   - notes: string (<= 500) | null
+//
+// Subcollection: users/{userId}/notifications
+// Document ID: {notificationId}
+// Required Fields:
+//   - title: string (1..160 chars)
+//   - body: string (0..500 chars)
+//   - type: string ('upcoming_payable' | 'overdue_payable' | 'invoice_due' | 'budget_warning' | 'budget_exceeded' | 'expected_income' | 'custom_reminder')
+//   - scheduledFor: timestamp
+//   - isRead: bool
+//   - isCustom: bool
+//   - createdAt: timestamp (immutable)
+//   - updatedAt: timestamp
+// Optional / Nullable Fields:
+//   - referenceId: string (<= 128) | null
+//
+// Subcollection: users/{userId}/notification_devices
+// Document ID: {deviceId}
+// Required & Allowed Fields:
+//   - token: string (1..1024 chars)
+//   - platform: string (1..60 chars)
+//   - createdAt: timestamp (immutable)
+//   - updatedAt: timestamp
 //
 // ===============================================================
 
@@ -260,6 +307,9 @@ service cloud.firestore {
             'defaultCurrency',
             'localeCode',
             'monthStartDay',
+            'reminderDaysBefore',
+            'notificationsEnabled',
+            'pushNotificationsEnabled',
             'createdAt',
             'updatedAt'
           ])
@@ -276,6 +326,9 @@ service cloud.firestore {
           && data.monthStartDay is int
           && data.monthStartDay >= 1
           && data.monthStartDay <= 28
+          && (!('reminderDaysBefore' in data) || (data.reminderDaysBefore is int && data.reminderDaysBefore >= 1 && data.reminderDaysBefore <= 30))
+          && (!('notificationsEnabled' in data) || data.notificationsEnabled is bool)
+          && (!('pushNotificationsEnabled' in data) || data.pushNotificationsEnabled is bool)
           && (!('createdAt' in data) || data.createdAt is timestamp)
           && (!('updatedAt' in data) || data.updatedAt is timestamp);
     }
@@ -591,6 +644,113 @@ service cloud.firestore {
           && data.updatedAt is timestamp;
     }
 
+    function isValidRecurringRule(data) {
+      return hasRequiredFields(data, [
+            'description',
+            'kind',
+            'amountCents',
+            'isVariableAmount',
+            'categoryId',
+            'frequency',
+            'startDate',
+            'status',
+            'createdAt',
+            'updatedAt'
+          ])
+          && hasOnlyAllowedFields(data, [
+            'description',
+            'kind',
+            'amountCents',
+            'isVariableAmount',
+            'categoryId',
+            'accountId',
+            'cardId',
+            'frequency',
+            'customIntervalDays',
+            'startDate',
+            'endDate',
+            'status',
+            'lastGeneratedKey',
+            'skippedOccurrenceKeys',
+            'notes',
+            'createdAt',
+            'updatedAt'
+          ])
+          && validStringLength(data, 'description', 1, 120)
+          && data.kind is string
+          && data.kind in ['income', 'expense']
+          && data.amountCents is int && data.amountCents > 0
+          && data.isVariableAmount is bool
+          && validStringLength(data, 'categoryId', 1, 128)
+          && isValidNullableString(data, 'accountId', 128)
+          && isValidNullableString(data, 'cardId', 128)
+          && data.frequency is string
+          && data.frequency in ['daily', 'weekly', 'biweekly', 'monthly', 'bimonthly', 'quarterly', 'semiannual', 'annual', 'custom']
+          && (!('customIntervalDays' in data) || data.customIntervalDays == null || (data.customIntervalDays is int && data.customIntervalDays >= 1 && data.customIntervalDays <= 3650))
+          && data.startDate is timestamp
+          && isValidNullableTimestamp(data, 'endDate')
+          && data.status is string
+          && data.status in ['active', 'paused', 'canceled']
+          && isValidNullableString(data, 'lastGeneratedKey', 128)
+          && (!('skippedOccurrenceKeys' in data) || (data.skippedOccurrenceKeys is list && data.skippedOccurrenceKeys.size() <= 200))
+          && isValidNullableString(data, 'notes', 500)
+          && data.createdAt is timestamp
+          && data.updatedAt is timestamp;
+    }
+
+    function isValidNotification(data) {
+      return hasRequiredFields(data, [
+            'title',
+            'body',
+            'type',
+            'scheduledFor',
+            'isRead',
+            'isCustom',
+            'createdAt',
+            'updatedAt'
+          ])
+          && hasOnlyAllowedFields(data, [
+            'title',
+            'body',
+            'type',
+            'referenceId',
+            'scheduledFor',
+            'isRead',
+            'isCustom',
+            'createdAt',
+            'updatedAt'
+          ])
+          && validStringLength(data, 'title', 1, 160)
+          && validStringLength(data, 'body', 0, 500)
+          && data.type is string
+          && data.type in ['upcoming_payable', 'overdue_payable', 'invoice_due', 'budget_warning', 'budget_exceeded', 'expected_income', 'custom_reminder']
+          && isValidNullableString(data, 'referenceId', 128)
+          && data.scheduledFor is timestamp
+          && data.isRead is bool
+          && data.isCustom is bool
+          && data.createdAt is timestamp
+          && data.updatedAt is timestamp;
+    }
+
+    function isValidNotificationDevice(data) {
+      return hasRequiredFields(data, [
+            'token',
+            'platform',
+            'createdAt',
+            'updatedAt'
+          ])
+          && hasOnlyAllowedFields(data, [
+            'token',
+            'platform',
+            'createdAt',
+            'updatedAt'
+          ])
+          && validStringLength(data, 'token', 1, 1024)
+          && validStringLength(data, 'platform', 1, 60)
+          && data.createdAt is timestamp
+          && data.updatedAt is timestamp;
+    }
+
     // ===============================================================
     // Collection Rules
     // ===============================================================
@@ -670,26 +830,42 @@ service cloud.firestore {
             && areImmutableFieldsUnchanged(['createdAt']);
       }
 
+      match /recurring/{recurringId} {
+        allow read, delete: if isOwner(userId);
+        allow create: if isOwner(userId)
+            && isValidRecurringRule(request.resource.data);
+        allow update: if isOwner(userId)
+            && isValidRecurringRule(request.resource.data)
+            && areImmutableFieldsUnchanged(['createdAt']);
+      }
+
+      match /notifications/{notificationId} {
+        allow read, delete: if isOwner(userId);
+        allow create: if isOwner(userId)
+            && isValidNotification(request.resource.data);
+        allow update: if isOwner(userId)
+            && isValidNotification(request.resource.data)
+            && areImmutableFieldsUnchanged(['createdAt']);
+      }
+
+      match /notification_devices/{deviceId} {
+        allow read, delete: if isOwner(userId);
+        allow create: if isOwner(userId)
+            && isValidNotificationDevice(request.resource.data);
+        allow update: if isOwner(userId)
+            && isValidNotificationDevice(request.resource.data)
+            && areImmutableFieldsUnchanged(['createdAt']);
+      }
+
       // =============================================================
       // Future Feature Collections (Preserved Rules)
       // =============================================================
-
-      match /recurring/{recurringId} {
-        allow read, delete: if isOwner(userId);
-        allow create, update: if isOwner(userId)
-            && request.resource.data.amountCents is int
-            && request.resource.data.amountCents > 0;
-      }
 
       match /budgets/{budgetId} {
         allow read, delete: if isOwner(userId);
         allow create, update: if isOwner(userId)
             && request.resource.data.limitCents is int
             && request.resource.data.limitCents > 0;
-      }
-
-      match /notifications/{notificationId} {
-        allow read, write: if isOwner(userId);
       }
 
       match /ai_interactions/{interactionId} {

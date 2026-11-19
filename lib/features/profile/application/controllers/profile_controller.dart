@@ -37,6 +37,9 @@ class ProfileController extends Notifier<ProfileActionState> {
     required String defaultCurrency,
     required String localeCode,
     required int monthStartDay,
+    int? reminderDaysBefore,
+    bool? notificationsEnabled,
+    bool? pushNotificationsEnabled,
   }) async {
     state = const ProfileActionState(isLoading: true);
     try {
@@ -60,6 +63,13 @@ class ProfileController extends Notifier<ProfileActionState> {
         defaultCurrency: defaultCurrency,
         localeCode: localeCode,
         monthStartDay: monthStartDay.clamp(1, 28),
+        reminderDaysBefore:
+            (reminderDaysBefore ?? currentProfile.reminderDaysBefore)
+                .clamp(1, 30),
+        notificationsEnabled:
+            notificationsEnabled ?? currentProfile.notificationsEnabled,
+        pushNotificationsEnabled:
+            pushNotificationsEnabled ?? currentProfile.pushNotificationsEnabled,
         updatedAt: DateTime.now(),
       );
 
@@ -82,6 +92,41 @@ class ProfileController extends Notifier<ProfileActionState> {
     } catch (_) {
       state = const ProfileActionState(
         errorMessage: 'Não foi possível salvar as alterações do perfil.',
+      );
+      return false;
+    }
+  }
+
+  Future<bool> updateNotificationPreferences({
+    required UserProfile currentProfile,
+    int? reminderDaysBefore,
+    bool? notificationsEnabled,
+    bool? pushNotificationsEnabled,
+  }) async {
+    state = const ProfileActionState(isLoading: true);
+    try {
+      final updated = currentProfile.copyWith(
+        reminderDaysBefore:
+            (reminderDaysBefore ?? currentProfile.reminderDaysBefore)
+                .clamp(1, 30),
+        notificationsEnabled:
+            notificationsEnabled ?? currentProfile.notificationsEnabled,
+        pushNotificationsEnabled:
+            pushNotificationsEnabled ?? currentProfile.pushNotificationsEnabled,
+        updatedAt: DateTime.now(),
+      );
+
+      await ref.read(profileRepositoryProvider).updateProfile(updated);
+      state = const ProfileActionState(
+        successMessage: 'Preferências de alertas atualizadas.',
+      );
+      return true;
+    } on Failure catch (failure) {
+      state = ProfileActionState(errorMessage: failure.message);
+      return false;
+    } catch (_) {
+      state = const ProfileActionState(
+        errorMessage: 'Não foi possível atualizar preferências de notificações.',
       );
       return false;
     }

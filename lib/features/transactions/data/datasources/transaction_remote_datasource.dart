@@ -323,6 +323,40 @@ class TransactionRemoteDatasource {
       attachmentsToDelete = existing.attachments;
       final now = DateTime.now();
 
+      DocumentReference<Map<String, dynamic>>? recurringRef;
+      DocumentSnapshot<Map<String, dynamic>>? recurringSnap;
+      if (existing.recurringId != null &&
+          existing.recurringId!.isNotEmpty &&
+          existing.occurrenceKey != null &&
+          existing.occurrenceKey!.isNotEmpty) {
+        recurringRef = _userDoc(userId)
+            .collection(FirestoreCollections.recurring)
+            .doc(existing.recurringId!);
+        recurringSnap = await tx.get(recurringRef);
+      }
+
+      void recordSkippedOccurrenceIfNeeded() {
+        if (recurringRef == null ||
+            recurringSnap == null ||
+            !recurringSnap.exists) {
+          return;
+        }
+        final occKey = existing.occurrenceKey!;
+        final rawSkipped =
+            recurringSnap.data()?['skippedOccurrenceKeys'] as List<dynamic>?;
+        final current = rawSkipped?.whereType<String>().toList() ?? <String>[];
+        if (!current.contains(occKey)) {
+          current.add(occKey);
+        }
+        final trimmed = current.length > 200
+            ? current.sublist(current.length - 200)
+            : current;
+        tx.update(recurringRef, <String, dynamic>{
+          'skippedOccurrenceKeys': trimmed,
+          'updatedAt': FirestoreUtils.toMillisTimestamp(now),
+        });
+      }
+
       if (existing.kind == TransactionKind.cardPurchase ||
           existing.kind == TransactionKind.cardRefund) {
         final isRefund = existing.kind == TransactionKind.cardRefund;
@@ -351,6 +385,7 @@ class TransactionRemoteDatasource {
         }
 
         tx.delete(docRef);
+        recordSkippedOccurrenceIfNeeded();
 
         if (invoiceRef != null && invoiceSnap != null && invoiceSnap.exists) {
           final invoice = InvoiceModel.fromFirestore(invoiceSnap);
@@ -394,6 +429,7 @@ class TransactionRemoteDatasource {
       }
 
       tx.delete(docRef);
+      recordSkippedOccurrenceIfNeeded();
       if (accountRef != null && accountSnap != null && accountSnap.exists) {
         final account = AccountModel.fromFirestore(accountSnap);
         tx.update(accountRef, <String, dynamic>{

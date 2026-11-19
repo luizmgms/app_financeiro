@@ -26,6 +26,7 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
   String _selectedCurrency = 'BRL';
   String _selectedLocale = 'pt_BR';
   int _selectedMonthStartDay = 1;
+  int _selectedReminderDays = 3;
   String? _hydratedUid;
 
   @override
@@ -44,6 +45,7 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
     _selectedCurrency = profile.defaultCurrency;
     _selectedLocale = profile.localeCode;
     _selectedMonthStartDay = profile.monthStartDay;
+    _selectedReminderDays = profile.reminderDaysBefore;
   }
 
   Future<void> _saveProfile(UserProfile currentProfile) async {
@@ -56,6 +58,7 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
           defaultCurrency: _selectedCurrency,
           localeCode: _selectedLocale,
           monthStartDay: _selectedMonthStartDay,
+          reminderDaysBefore: _selectedReminderDays,
         );
   }
 
@@ -410,6 +413,7 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
                               const SizedBox(height: 14),
                               DropdownButtonFormField<int>(
                                 value: _selectedMonthStartDay,
+                                isExpanded: true,
                                 decoration: const InputDecoration(
                                   labelText:
                                       'Primeiro dia do mês para relatórios',
@@ -420,13 +424,62 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
                                   for (var day = 1; day <= 28; day++)
                                     DropdownMenuItem(
                                       value: day,
-                                      child: Text('Dia $day'),
+                                      child: Text(
+                                        'Dia $day',
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
                                     ),
                                 ],
                                 onChanged: (val) {
                                   if (val != null) {
                                     setState(
                                         () => _selectedMonthStartDay = val);
+                                  }
+                                },
+                              ),
+                              const SizedBox(height: 14),
+                              DropdownButtonFormField<int>(
+                                value: [1, 2, 3, 5, 7, 15]
+                                        .contains(_selectedReminderDays)
+                                    ? _selectedReminderDays
+                                    : 3,
+                                isExpanded: true,
+                                decoration: const InputDecoration(
+                                  labelText:
+                                      'Antecedência padrão para alertas',
+                                  prefixIcon: Icon(
+                                    Icons.notifications_active_outlined,
+                                  ),
+                                ),
+                                items: const [
+                                  DropdownMenuItem(
+                                    value: 1,
+                                    child: Text('1 dia antes do vencimento'),
+                                  ),
+                                  DropdownMenuItem(
+                                    value: 2,
+                                    child: Text('2 dias antes do vencimento'),
+                                  ),
+                                  DropdownMenuItem(
+                                    value: 3,
+                                    child: Text('3 dias antes do vencimento'),
+                                  ),
+                                  DropdownMenuItem(
+                                    value: 5,
+                                    child: Text('5 dias antes do vencimento'),
+                                  ),
+                                  DropdownMenuItem(
+                                    value: 7,
+                                    child: Text('7 dias antes do vencimento'),
+                                  ),
+                                  DropdownMenuItem(
+                                    value: 15,
+                                    child: Text('15 dias antes do vencimento'),
+                                  ),
+                                ],
+                                onChanged: (val) {
+                                  if (val != null) {
+                                    setState(() => _selectedReminderDays = val);
                                   }
                                 },
                               ),

@@ -92,6 +92,7 @@ class ProfileRemoteDatasource {
       FirestoreCollections.installments,
       FirestoreCollections.budgets,
       FirestoreCollections.notifications,
+      FirestoreCollections.notificationDevices,
       FirestoreCollections.aiInteractions,
     ];
 

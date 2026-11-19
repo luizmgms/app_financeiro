@@ -1,4 +1,5 @@
 import 'dart:math' as math;
+import 'package:firebase_core/firebase_core.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -19,7 +20,10 @@ import '../../../authentication/application/providers/auth_providers.dart';
 import '../../../categories/application/providers/category_providers.dart';
 import '../../../credit_cards/application/providers/credit_card_providers.dart';
 import '../../../credit_cards/presentation/widgets/card_purchase_form_dialog.dart';
+import '../../../notifications/application/controllers/notification_controller.dart';
+import '../../../notifications/application/providers/notification_providers.dart';
 import '../../../profile/application/providers/profile_providers.dart';
+import '../../../recurring/application/controllers/recurring_controller.dart';
 import '../../../transactions/application/controllers/transaction_controller.dart';
 import '../../../transactions/application/providers/transaction_providers.dart';
 import '../../../transactions/domain/entities/transaction_entity.dart';
@@ -38,6 +42,24 @@ class DashboardPage extends ConsumerStatefulWidget {
 
 class _DashboardPageState extends ConsumerState<DashboardPage> {
   DatePeriod _activePeriod = DatePeriod.fromType(DatePeriodType.thisMonth);
+  String? _syncedSessionUid;
+
+  void _scheduleAutomationSyncIfNeeded({
+    required bool isReady,
+    required String? uid,
+  }) {
+    if (!isReady || uid == null || Firebase.apps.isEmpty) return;
+    if (_syncedSessionUid == uid) return;
+    _syncedSessionUid = uid;
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
+      await ref.read(recurringControllerProvider.notifier).syncNow(silent: true);
+      if (!mounted) return;
+      await ref
+          .read(notificationControllerProvider.notifier)
+          .syncAlerts(silent: true);
+    });
+  }
 
   Future<void> _selectPeriod(DatePeriodType type) async {
     if (type != DatePeriodType.custom) {
@@ -77,6 +99,12 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
   Widget build(BuildContext context) {
     final bootstrap = ref.watch(appBootstrapStateProvider);
     final authUser = ref.watch(currentAuthUserProvider);
+    _scheduleAutomationSyncIfNeeded(
+      isReady: bootstrap.firebase.isReady,
+      uid: authUser?.uid,
+    );
+    final unreadNotificationsCount =
+        ref.watch(unreadNotificationsCountProvider);
     final profile = ref.watch(userProfileProvider).valueOrNull;
     final activeAccounts = ref.watch(activeAccountsProvider);
     final accountsMap = ref.watch(accountsByIdProvider);
@@ -135,7 +163,15 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
           IconButton(
             tooltip: 'Notificações',
             onPressed: () => context.push(AppRoutes.notifications),
-            icon: const Icon(Icons.notifications_outlined),
+            icon: Badge(
+              isLabelVisible: unreadNotificationsCount > 0,
+              label: Text(
+                unreadNotificationsCount > 99
+                    ? '99+'
+                    : '$unreadNotificationsCount',
+              ),
+              child: const Icon(Icons.notifications_outlined),
+            ),
           ),
           IconButton(
             tooltip: authUser != null ? 'Perfil' : 'Entrar',

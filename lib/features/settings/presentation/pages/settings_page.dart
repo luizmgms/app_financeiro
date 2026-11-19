@@ -203,6 +203,27 @@ class SettingsPage extends ConsumerWidget {
                         trailing: const Icon(Icons.chevron_right_rounded),
                         onTap: () => context.push(AppRoutes.categories),
                       ),
+                      const Divider(height: 1),
+                      ListTile(
+                        leading: const Icon(Icons.repeat_rounded),
+                        title: const Text('Contas recorrentes'),
+                        subtitle: const Text(
+                          'Receitas e despesas periódicas automáticas sem duplicidades',
+                        ),
+                        trailing: const Icon(Icons.chevron_right_rounded),
+                        onTap: () => context.push(AppRoutes.recurring),
+                      ),
+                      const Divider(height: 1),
+                      ListTile(
+                        leading:
+                            const Icon(Icons.notifications_active_outlined),
+                        title: const Text('Notificações e alertas'),
+                        subtitle: const Text(
+                          'Antecedência dos vencimentos, lembretes e Push (FCM)',
+                        ),
+                        trailing: const Icon(Icons.chevron_right_rounded),
+                        onTap: () => context.push(AppRoutes.notifications),
+                      ),
                     ],
                   ),
                 ),
