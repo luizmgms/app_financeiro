@@ -17,6 +17,8 @@ import '../../../../shared/widgets/summary_metric_card.dart';
 import '../../../accounts/application/providers/account_providers.dart';
 import '../../../accounts/presentation/widgets/transfer_form_dialog.dart';
 import '../../../authentication/application/providers/auth_providers.dart';
+import '../../../budgets/application/providers/budget_providers.dart';
+import '../../../budgets/domain/services/budget_calculator.dart';
 import '../../../categories/application/providers/category_providers.dart';
 import '../../../credit_cards/application/providers/credit_card_providers.dart';
 import '../../../credit_cards/presentation/widgets/card_purchase_form_dialog.dart';
@@ -24,15 +26,16 @@ import '../../../notifications/application/controllers/notification_controller.d
 import '../../../notifications/application/providers/notification_providers.dart';
 import '../../../profile/application/providers/profile_providers.dart';
 import '../../../recurring/application/controllers/recurring_controller.dart';
+import '../../../reports/domain/services/financial_analytics_service.dart';
+import '../../../reports/presentation/widgets/financial_charts.dart';
 import '../../../transactions/application/controllers/transaction_controller.dart';
 import '../../../transactions/application/providers/transaction_providers.dart';
 import '../../../transactions/domain/entities/transaction_entity.dart';
-import '../../../transactions/domain/entities/transaction_filter.dart';
-import '../../../transactions/domain/entities/transaction_summary.dart';
 import '../../../transactions/presentation/widgets/transaction_form_dialog.dart';
 import '../../../transactions/presentation/widgets/transaction_list_tile.dart';
 
-/// Tela inicial (Dashboard) com dados financeiros reais em tempo real.
+/// Tela inicial (Dashboard) com visão completa em tempo real, projeção até o fim do mês,
+/// contas a pagar/receber, faturas abertas, vencimentos próximos, orçamentos e gráficos `fl_chart`.
 class DashboardPage extends ConsumerStatefulWidget {
   const DashboardPage({super.key});
 
@@ -42,6 +45,7 @@ class DashboardPage extends ConsumerStatefulWidget {
 
 class _DashboardPageState extends ConsumerState<DashboardPage> {
   DatePeriod _activePeriod = DatePeriod.fromType(DatePeriodType.thisMonth);
+  int _lastMonthStartDay = 1;
   String? _syncedSessionUid;
 
   void _scheduleAutomationSyncIfNeeded({
@@ -61,9 +65,14 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
     });
   }
 
-  Future<void> _selectPeriod(DatePeriodType type) async {
+  Future<void> _selectPeriod(DatePeriodType type, int monthStartDay) async {
     if (type != DatePeriodType.custom) {
-      setState(() => _activePeriod = DatePeriod.fromType(type));
+      setState(
+        () => _activePeriod = DatePeriod.fromType(
+          type,
+          monthStartDay: monthStartDay,
+        ),
+      );
       return;
     }
 
@@ -106,14 +115,27 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
     final unreadNotificationsCount =
         ref.watch(unreadNotificationsCountProvider);
     final profile = ref.watch(userProfileProvider).valueOrNull;
+    final monthStartDay = profile?.monthStartDay ?? 1;
+    if (_activePeriod.type != DatePeriodType.custom &&
+        _lastMonthStartDay != monthStartDay) {
+      _lastMonthStartDay = monthStartDay;
+      _activePeriod = DatePeriod.fromType(
+        _activePeriod.type,
+        monthStartDay: monthStartDay,
+      );
+    }
+
+    final accounts = ref.watch(accountsStreamProvider).valueOrNull ?? const [];
     final activeAccounts = ref.watch(activeAccountsProvider);
     final accountsMap = ref.watch(accountsByIdProvider);
     final categoriesMap = ref.watch(categoriesByIdProvider);
+    final cards = ref.watch(creditCardsStreamProvider).valueOrNull ?? const [];
     final activeCards = ref.watch(activeCreditCardsProvider);
     final cardsMap = ref.watch(creditCardsByIdProvider);
-    final totalOpenInvoicesCents =
-        ref.watch(totalOpenInvoicesAmountCentsProvider);
-    final totalBalanceCents = ref.watch(totalAvailableBalanceCentsProvider);
+    final invoices = ref.watch(invoicesStreamProvider).valueOrNull ?? const [];
+    final plans =
+        ref.watch(installmentPlansStreamProvider).valueOrNull ?? const [];
+    final budgetUsages = ref.watch(currentMonthBudgetUsagesProvider);
     final allTransactions =
         ref.watch(transactionsStreamProvider).valueOrNull ?? const [];
 
@@ -121,14 +143,16 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
     final currency = profile?.defaultCurrency ?? 'BRL';
     final theme = Theme.of(context);
 
-    final periodFilter = TransactionFilter(period: _activePeriod);
-    final periodTransactions =
-        allTransactions.where(periodFilter.matches).toList(growable: false);
-    final summary =
-        TransactionPeriodSummary.fromTransactions(periodTransactions);
-    final projectedBalanceCents = totalBalanceCents +
-        summary.pendingIncomeCents -
-        summary.pendingExpenseCents;
+    final snapshot = FinancialAnalyticsService.buildSnapshot(
+      period: _activePeriod,
+      allTransactions: allTransactions,
+      accounts: accounts,
+      cards: cards,
+      invoices: invoices,
+      installmentPlans: plans,
+      categoriesById: categoriesMap,
+      monthStartDay: monthStartDay,
+    );
 
     final firebaseColor = switch (bootstrap.firebase.status) {
       FirebaseConnectionStatus.connected => AppColors.income,
@@ -255,7 +279,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                       ChoiceChip(
                         label: Text(period.label),
                         selected: _activePeriod.type == period,
-                        onSelected: (_) => _selectPeriod(period),
+                        onSelected: (_) => _selectPeriod(period, monthStartDay),
                       ),
                     Padding(
                       padding: const EdgeInsets.only(left: 4),
@@ -288,7 +312,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                           width: itemWidth,
                           child: SummaryMetricCard(
                             title: 'Saldo total disponível',
-                            valueText: fmt(totalBalanceCents),
+                            valueText: fmt(snapshot.totalBalanceCents),
                             subtitle: activeAccounts.isEmpty
                                 ? 'Aguardando contas cadastradas'
                                 : '${activeAccounts.length} conta(s) ativa(s)',
@@ -300,10 +324,10 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                           width: itemWidth,
                           child: SummaryMetricCard(
                             title: 'Receitas do período',
-                            valueText: fmt(summary.totalIncomeCents),
-                            subtitle: summary.totalIncomeCents == 0
+                            valueText: fmt(snapshot.summary.totalIncomeCents),
+                            subtitle: snapshot.summary.totalIncomeCents == 0
                                 ? 'Nenhuma receita registrada'
-                                : 'A receber: ${fmt(summary.pendingIncomeCents)}',
+                                : 'Recebido: ${fmt(snapshot.summary.receivedIncomeCents)}',
                             icon: Icons.trending_up_rounded,
                             accentColor: AppColors.income,
                           ),
@@ -312,10 +336,10 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                           width: itemWidth,
                           child: SummaryMetricCard(
                             title: 'Despesas do período',
-                            valueText: fmt(summary.totalExpenseCents),
-                            subtitle: summary.totalExpenseCents == 0
+                            valueText: fmt(snapshot.summary.totalExpenseCents),
+                            subtitle: snapshot.summary.totalExpenseCents == 0
                                 ? 'Nenhuma despesa registrada'
-                                : 'A pagar: ${fmt(summary.pendingExpenseCents)}',
+                                : 'Pago: ${fmt(snapshot.summary.paidExpenseCents)}',
                             icon: Icons.trending_down_rounded,
                             accentColor: AppColors.expense,
                           ),
@@ -324,12 +348,60 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                           width: itemWidth,
                           child: SummaryMetricCard(
                             title: 'Saldo projetado',
-                            valueText: fmt(projectedBalanceCents),
-                            subtitle: totalOpenInvoicesCents > 0
-                                ? 'Faturas em aberto: ${fmt(totalOpenInvoicesCents)}'
-                                : 'Considera receitas e despesas pendentes do período',
+                            valueText: fmt(snapshot.projectedEndOfMonthCents),
+                            subtitle: snapshot.totalOpenInvoicesCents > 0
+                                ? 'Faturas em aberto: ${fmt(snapshot.totalOpenInvoicesCents)}'
+                                : 'Considera pendências e faturas até o fim do período',
                             icon: Icons.auto_graph_rounded,
                             accentColor: AppColors.credit,
+                          ),
+                        ),
+                      ],
+                    );
+                  },
+                ),
+                const SizedBox(height: 12),
+                LayoutBuilder(
+                  builder: (context, constraints) {
+                    final columns = constraints.maxWidth >= 780
+                        ? 3
+                        : constraints.maxWidth >= 500
+                            ? 2
+                            : 1;
+                    final itemWidth =
+                        (constraints.maxWidth - (12 * (columns - 1))) / columns;
+                    return Wrap(
+                      spacing: 12,
+                      runSpacing: 12,
+                      children: [
+                        SizedBox(
+                          width: itemWidth,
+                          child: _CompactMetricStripCard(
+                            label: 'Contas a pagar (pendentes)',
+                            value: fmt(snapshot.summary.pendingExpenseCents),
+                            icon: Icons.event_busy_outlined,
+                            color: AppColors.expense,
+                            onTap: () => context.go(AppRoutes.transactions),
+                          ),
+                        ),
+                        SizedBox(
+                          width: itemWidth,
+                          child: _CompactMetricStripCard(
+                            label: 'Contas a receber (pendentes)',
+                            value: fmt(snapshot.summary.pendingIncomeCents),
+                            icon: Icons.schedule_rounded,
+                            color: AppColors.income,
+                            onTap: () => context.go(AppRoutes.transactions),
+                          ),
+                        ),
+                        SizedBox(
+                          width: itemWidth,
+                          child: _CompactMetricStripCard(
+                            label: 'Faturas abertas dos cartões',
+                            value: fmt(snapshot.totalOpenInvoicesCents),
+                            icon: Icons.credit_card_outlined,
+                            color: AppColors.credit,
+                            onTap: () => context.go(AppRoutes.creditCards),
                           ),
                         ),
                       ],
@@ -339,10 +411,78 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                 const SizedBox(height: 16),
                 _IncomeExpenseChartCard(
                   period: _activePeriod,
-                  transactions: periodTransactions,
+                  transactions: snapshot.periodTransactions,
                 ),
                 const SizedBox(height: 16),
+                LayoutBuilder(
+                  builder: (context, constraints) {
+                    final twoCols = constraints.maxWidth >= 820;
+                    final cardWidth = twoCols
+                        ? (constraints.maxWidth - 12) / 2
+                        : constraints.maxWidth;
+                    return Wrap(
+                      spacing: 12,
+                      runSpacing: 12,
+                      children: [
+                        SizedBox(
+                          width: cardWidth,
+                          child: CategoryExpensesPieChartCard(
+                            items: snapshot.byCategory,
+                            locale: locale,
+                            currencyCode: currency,
+                            actionLabel: 'Relatórios',
+                            onActionTap: () => context.go(AppRoutes.reports),
+                          ),
+                        ),
+                        SizedBox(
+                          width: cardWidth,
+                          child: MonthlyEvolutionLineChartCard(
+                            points: snapshot.monthlyEvolution,
+                            title: 'Evolução financeira mensal',
+                            showEquityLine: false,
+                          ),
+                        ),
+                      ],
+                    );
+                  },
+                ),
                 if (bootstrap.firebase.isReady) ...[
+                  const SizedBox(height: 16),
+                  LayoutBuilder(
+                    builder: (context, constraints) {
+                      final twoCols = constraints.maxWidth >= 820;
+                      final cardWidth = twoCols
+                          ? (constraints.maxWidth - 12) / 2
+                          : constraints.maxWidth;
+                      return Wrap(
+                        spacing: 12,
+                        runSpacing: 12,
+                        children: [
+                          SizedBox(
+                            width: cardWidth,
+                            child: _UpcomingDueBillsCard(
+                              items: snapshot.upcomingDueItems,
+                              formatMoney: fmt,
+                              locale: locale,
+                              onOpenNotifications: () =>
+                                  context.push(AppRoutes.notifications),
+                            ),
+                          ),
+                          SizedBox(
+                            width: cardWidth,
+                            child: _DashboardBudgetsCard(
+                              usages: budgetUsages,
+                              categoriesMap: categoriesMap,
+                              formatMoney: fmt,
+                              onOpenBudgets: () =>
+                                  context.push(AppRoutes.budgets),
+                            ),
+                          ),
+                        ],
+                      );
+                    },
+                  ),
+                  const SizedBox(height: 16),
                   Card(
                     child: Padding(
                       padding: const EdgeInsets.all(20),
@@ -352,10 +492,12 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                           Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              Text(
-                                'Últimas movimentações',
-                                style: theme.textTheme.titleMedium?.copyWith(
-                                  fontWeight: FontWeight.w700,
+                              Expanded(
+                                child: Text(
+                                  'Últimas movimentações',
+                                  style: theme.textTheme.titleMedium?.copyWith(
+                                    fontWeight: FontWeight.w700,
+                                  ),
                                 ),
                               ),
                               TextButton(
@@ -424,12 +566,298 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                       ),
                     ),
                   ),
-                  const SizedBox(height: 16),
                 ],
+                const SizedBox(height: 16),
                 _ModulesDirectoryCard(),
               ],
             ),
           ),
+        ),
+      ),
+    );
+  }
+}
+
+class _CompactMetricStripCard extends StatelessWidget {
+  const _CompactMetricStripCard({
+    required this.label,
+    required this.value,
+    required this.icon,
+    required this.color,
+    required this.onTap,
+  });
+
+  final String label;
+  final String value;
+  final IconData icon;
+  final Color color;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Card(
+      child: InkWell(
+        borderRadius: BorderRadius.circular(18),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          child: Row(
+            children: [
+              CircleAvatar(
+                radius: 17,
+                backgroundColor: color.withOpacity(0.14),
+                foregroundColor: color,
+                child: Icon(icon, size: 18),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.labelMedium?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      value,
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w800,
+                        color: color,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const Icon(Icons.chevron_right_rounded, size: 18),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _UpcomingDueBillsCard extends StatelessWidget {
+  const _UpcomingDueBillsCard({
+    required this.items,
+    required this.formatMoney,
+    required this.locale,
+    required this.onOpenNotifications,
+  });
+
+  final List<UpcomingDueItem> items;
+  final String Function(int) formatMoney;
+  final String locale;
+  final VoidCallback onOpenNotifications;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final top = items.take(4).toList(growable: false);
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(18),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    'Contas com vencimento próximo',
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+                TextButton(
+                  onPressed: onOpenNotifications,
+                  child: const Text('Alertas'),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            if (top.isEmpty)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                child: Text(
+                  'Nenhuma conta ou fatura vencendo nos próximos 15 dias.',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              )
+            else
+              for (final item in top)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Row(
+                    children: [
+                      Icon(
+                        item.isOverdue
+                            ? Icons.warning_amber_rounded
+                            : (item.isInvoice
+                                ? Icons.credit_card_rounded
+                                : Icons.event_note_rounded),
+                        size: 18,
+                        color: item.isOverdue
+                            ? AppColors.expense
+                            : AppColors.warning,
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              item.title,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style:
+                                  const TextStyle(fontWeight: FontWeight.w600),
+                            ),
+                            Text(
+                              '${DateFormatter.shortDate(item.dueDate, locale: locale)} • ${item.subtitle}',
+                              style: theme.textTheme.bodySmall,
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        formatMoney(item.amountCents),
+                        style: TextStyle(
+                          fontWeight: FontWeight.w700,
+                          color: item.isOverdue
+                              ? AppColors.expense
+                              : theme.colorScheme.onSurface,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _DashboardBudgetsCard extends StatelessWidget {
+  const _DashboardBudgetsCard({
+    required this.usages,
+    required this.categoriesMap,
+    required this.formatMoney,
+    required this.onOpenBudgets,
+  });
+
+  final List<BudgetUsageItem> usages;
+  final Map<String, dynamic> categoriesMap;
+  final String Function(int) formatMoney;
+  final VoidCallback onOpenBudgets;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final top = usages.take(4).toList(growable: false);
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(18),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    'Orçamentos do mês',
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+                TextButton(
+                  onPressed: onOpenBudgets,
+                  child: const Text('Gerenciar'),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            if (top.isEmpty)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                child: Text(
+                  'Defina tetos por categoria em Orçamentos para acompanhar o consumo mensal aqui.',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              )
+            else
+              for (final u in top) ...[
+                Builder(
+                  builder: (context) {
+                    final color = switch (u.healthStatus) {
+                      BudgetHealthStatus.healthy => AppColors.income,
+                      BudgetHealthStatus.warning => AppColors.warning,
+                      BudgetHealthStatus.exceeded => AppColors.expense,
+                    };
+                    final catName =
+                        categoriesMap[u.budget.categoryId]?.name ?? 'Categoria';
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 10),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 4,
+                            alignment: WrapAlignment.spaceBetween,
+                            crossAxisAlignment: WrapCrossAlignment.center,
+                            children: [
+                              Text(
+                                catName,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              Text(
+                                '${formatMoney(u.spentCents)} / ${formatMoney(u.limitCents)} (${u.consumedPercent}%)',
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  fontWeight: FontWeight.w700,
+                                  color: color,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 5),
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(6),
+                            child: LinearProgressIndicator(
+                              value: u.consumedRatio.clamp(0.0, 1.0),
+                              minHeight: 7,
+                              backgroundColor: theme.colorScheme.surfaceVariant
+                                  .withOpacity(0.5),
+                              color: color,
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
+              ],
+          ],
         ),
       ),
     );
@@ -535,6 +963,9 @@ class _IncomeExpenseChartCard extends StatelessWidget {
 
       if (tx.kind == TransactionKind.income) {
         incomeBuckets[bucketIndex] += valueReais;
+      } else if (tx.kind == TransactionKind.cardRefund) {
+        expenseBuckets[bucketIndex] =
+            math.max(0, expenseBuckets[bucketIndex] - valueReais);
       } else {
         expenseBuckets[bucketIndex] += valueReais;
       }
@@ -698,7 +1129,9 @@ class _ModulesDirectoryCard extends StatelessWidget {
                     label: Text(item.$1),
                     onPressed: () {
                       if (item.$3 == AppRoutes.accounts ||
-                          item.$3 == AppRoutes.transactions) {
+                          item.$3 == AppRoutes.transactions ||
+                          item.$3 == AppRoutes.reports ||
+                          item.$3 == AppRoutes.creditCards) {
                         context.go(item.$3);
                       } else {
                         context.push(item.$3);

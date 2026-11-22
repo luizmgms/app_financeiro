@@ -5,7 +5,7 @@ rules_version = '2';
 // ===============================================================
 //
 // This security rules file enforces strict per-user isolation and
-// schema validation for Finance Control (Etapas 1, 2, 3 & 4),
+// schema validation for Finance Control (Etapas 1, 2, 3, 4 & 5),
 // while preserving placeholder rules for upcoming feature collections.
 //
 // Collection: users
@@ -185,6 +185,19 @@ rules_version = '2';
 //   - platform: string (1..60 chars)
 //   - createdAt: timestamp (immutable)
 //   - updatedAt: timestamp
+//
+// Subcollection: users/{userId}/budgets
+// Document ID: {budgetId} (e.g. {categoryId}_{YYYY}_{MM})
+// Required Fields:
+//   - categoryId: string (1..128 chars)
+//   - year: int (2000..2200)
+//   - month: int (1..12)
+//   - limitCents: int (> 0)
+//   - alertThresholdPercent: int (1..100)
+//   - createdAt: timestamp (immutable)
+//   - updatedAt: timestamp
+// Optional / Nullable Fields:
+//   - notes: string (<= 500) | null
 //
 // ===============================================================
 
@@ -751,6 +764,36 @@ service cloud.firestore {
           && data.updatedAt is timestamp;
     }
 
+    function isValidBudget(data) {
+      return hasRequiredFields(data, [
+            'categoryId',
+            'year',
+            'month',
+            'limitCents',
+            'alertThresholdPercent',
+            'createdAt',
+            'updatedAt'
+          ])
+          && hasOnlyAllowedFields(data, [
+            'categoryId',
+            'year',
+            'month',
+            'limitCents',
+            'alertThresholdPercent',
+            'notes',
+            'createdAt',
+            'updatedAt'
+          ])
+          && validStringLength(data, 'categoryId', 1, 128)
+          && data.year is int && data.year >= 2000 && data.year <= 2200
+          && data.month is int && data.month >= 1 && data.month <= 12
+          && data.limitCents is int && data.limitCents > 0
+          && data.alertThresholdPercent is int && data.alertThresholdPercent >= 1 && data.alertThresholdPercent <= 100
+          && isValidNullableString(data, 'notes', 500)
+          && data.createdAt is timestamp
+          && data.updatedAt is timestamp;
+    }
+
     // ===============================================================
     // Collection Rules
     // ===============================================================
@@ -857,16 +900,18 @@ service cloud.firestore {
             && areImmutableFieldsUnchanged(['createdAt']);
       }
 
+      match /budgets/{budgetId} {
+        allow read, delete: if isOwner(userId);
+        allow create: if isOwner(userId)
+            && isValidBudget(request.resource.data);
+        allow update: if isOwner(userId)
+            && isValidBudget(request.resource.data)
+            && areImmutableFieldsUnchanged(['createdAt']);
+      }
+
       // =============================================================
       // Future Feature Collections (Preserved Rules)
       // =============================================================
-
-      match /budgets/{budgetId} {
-        allow read, delete: if isOwner(userId);
-        allow create, update: if isOwner(userId)
-            && request.resource.data.limitCents is int
-            && request.resource.data.limitCents > 0;
-      }
 
       match /ai_interactions/{interactionId} {
         allow read, write: if isOwner(userId);

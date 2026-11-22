@@ -4,6 +4,7 @@ import { onSchedule } from "firebase-functions/v2/scheduler";
 import { logger } from "firebase-functions/v2";
 import {
   AlertCandidate,
+  BudgetSnapshotInput,
   computeOccurrencesInWindow,
   evaluateNotificationCandidates,
   InvoiceSnapshotInput,
@@ -279,17 +280,20 @@ async function syncUserAutomation(
     return { generatedOccurrences, createdAlerts: 0, sentPushMessages: 0 };
   }
 
-  const [pendingTxSnap, invoicesSnap, cardsSnap] = await Promise.all([
-    userRef
-      .collection("transactions")
-      .where("status", "in", ["pending", "overdue"])
-      .get(),
-    userRef
-      .collection("invoices")
-      .where("status", "in", ["open", "closed", "overdue"])
-      .get(),
-    userRef.collection("credit_cards").get(),
-  ]);
+  const [pendingTxSnap, invoicesSnap, cardsSnap, budgetsSnap, categoriesSnap] =
+    await Promise.all([
+      userRef
+        .collection("transactions")
+        .where("status", "in", ["pending", "overdue"])
+        .get(),
+      userRef
+        .collection("invoices")
+        .where("status", "in", ["open", "closed", "overdue"])
+        .get(),
+      userRef.collection("credit_cards").get(),
+      userRef.collection("budgets").get(),
+      userRef.collection("categories").get(),
+    ]);
 
   const txInputs: TransactionSnapshotInput[] = pendingTxSnap.docs.map((doc) => {
     const d = doc.data();
@@ -323,6 +327,97 @@ async function syncUserAutomation(
     cardNamesById[cardDoc.id] = String(cardDoc.data().name ?? "Cartão");
   }
 
+  const categoryNamesById: Record<string, string> = {};
+  for (const catDoc of categoriesSnap.docs) {
+    categoryNamesById[catDoc.id] = String(catDoc.data().name ?? "Categoria");
+  }
+
+  // Avaliação de orçamentos do mês atual do usuário (caso haja metas cadastradas).
+  const budgetInputs: BudgetSnapshotInput[] = [];
+  if (!budgetsSnap.empty) {
+    const monthStartDay = Math.min(
+      Math.max(Number(profileData.monthStartDay ?? 1), 1),
+      28,
+    );
+    const saoPauloDay = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "America/Sao_Paulo",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    })
+      .format(referenceDate)
+      .split("-")
+      .map(Number);
+    let curYear = saoPauloDay[0];
+    let curMonth = saoPauloDay[1];
+    if (monthStartDay > 1 && saoPauloDay[2] < monthStartDay) {
+      const prev = new Date(Date.UTC(curYear, curMonth - 2, 1));
+      curYear = prev.getUTCFullYear();
+      curMonth = prev.getUTCMonth() + 1;
+    }
+
+    const maxStartDay = new Date(Date.UTC(curYear, curMonth, 0)).getUTCDate();
+    const safeStartDay = Math.min(monthStartDay, maxStartDay);
+    const nextAnchor = new Date(Date.UTC(curYear, curMonth, 1));
+    const maxNextDay = new Date(
+      Date.UTC(nextAnchor.getUTCFullYear(), nextAnchor.getUTCMonth() + 1, 0),
+    ).getUTCDate();
+    const safeNextDay = Math.min(monthStartDay, maxNextDay);
+
+    // Meia-noite BRT (-03:00) equivale a 03:00 UTC.
+    const cycleStart = new Date(
+      Date.UTC(curYear, curMonth - 1, safeStartDay, 3, 0, 0, 0),
+    );
+    const cycleEnd = new Date(
+      Date.UTC(
+        nextAnchor.getUTCFullYear(),
+        nextAnchor.getUTCMonth(),
+        safeNextDay,
+        2,
+        59,
+        59,
+        999,
+      ),
+    );
+    const monthTxSnap = await userRef
+      .collection("transactions")
+      .where("competencyDate", ">=", admin.firestore.Timestamp.fromDate(cycleStart))
+      .where("competencyDate", "<=", admin.firestore.Timestamp.fromDate(cycleEnd))
+      .get();
+
+    const spentByCategory: Record<string, number> = {};
+    for (const txDoc of monthTxSnap.docs) {
+      const td = txDoc.data();
+      const kind = String(td.kind ?? "");
+      const catId = td.categoryId ? String(td.categoryId) : "";
+      if (!catId) continue;
+      if (kind === "expense" || kind === "card_purchase") {
+        spentByCategory[catId] =
+          (spentByCategory[catId] ?? 0) + Number(td.amountCents ?? 0);
+      } else if (kind === "card_refund") {
+        spentByCategory[catId] =
+          (spentByCategory[catId] ?? 0) - Number(td.amountCents ?? 0);
+      }
+    }
+
+    for (const bDoc of budgetsSnap.docs) {
+      const bd = bDoc.data();
+      if (Number(bd.year) !== curYear || Number(bd.month) !== curMonth) {
+        continue;
+      }
+      const catId = String(bd.categoryId ?? "");
+      budgetInputs.push({
+        id: bDoc.id,
+        categoryName: categoryNamesById[catId] ?? "Categoria",
+        year: curYear,
+        month: curMonth,
+        limitCents: Number(bd.limitCents ?? 0),
+        spentCents: Math.max(0, spentByCategory[catId] ?? 0),
+        alertThresholdPercent: Number(bd.alertThresholdPercent ?? 80),
+      });
+    }
+  }
+
   const candidates = evaluateNotificationCandidates({
     transactions: txInputs,
     invoices: invoiceInputs,
@@ -330,6 +425,7 @@ async function syncUserAutomation(
     reminderDaysBefore,
     notificationsEnabled,
     referenceDate,
+    budgets: budgetInputs,
   }).slice(0, 40);
 
   let createdAlertsList: AlertCandidate[] = [];

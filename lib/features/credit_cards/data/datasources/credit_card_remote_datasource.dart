@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_core/firebase_core.dart';
 import '../../../../core/constants/firestore_collections.dart';
 import '../../../../core/errors/failures.dart';
 import '../../../../core/utils/firestore_utils.dart';
@@ -52,6 +53,9 @@ class CreditCardRemoteDatasource {
   }
 
   Stream<List<CreditCardEntity>> watchCards(String userId) {
+    if (_firestore == null && Firebase.apps.isEmpty) {
+      return Stream.value(const <CreditCardEntity>[]);
+    }
     return _cardsCollection(userId).snapshots().map((snapshot) {
       final list = snapshot.docs
           .map(CreditCardModel.fromFirestore)
@@ -63,6 +67,9 @@ class CreditCardRemoteDatasource {
   }
 
   Stream<List<InvoiceEntity>> watchInvoices(String userId) {
+    if (_firestore == null && Firebase.apps.isEmpty) {
+      return Stream.value(const <InvoiceEntity>[]);
+    }
     return _invoicesCollection(userId).snapshots().map((snapshot) {
       final list = snapshot.docs
           .map(InvoiceModel.fromFirestore)
@@ -78,6 +85,9 @@ class CreditCardRemoteDatasource {
   }
 
   Stream<List<InstallmentPlanEntity>> watchInstallmentPlans(String userId) {
+    if (_firestore == null && Firebase.apps.isEmpty) {
+      return Stream.value(const <InstallmentPlanEntity>[]);
+    }
     return _installmentsCollection(userId).snapshots().map((snapshot) {
       final list = snapshot.docs
           .map(InstallmentPlanModel.fromFirestore)

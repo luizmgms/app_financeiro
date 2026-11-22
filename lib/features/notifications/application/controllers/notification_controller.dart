@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/errors/failures.dart';
 import '../../../../core/errors/firebase_error_mapper.dart';
 import '../../../authentication/application/providers/auth_providers.dart';
+import '../../../budgets/application/providers/budget_providers.dart';
 import '../../../credit_cards/application/providers/credit_card_providers.dart';
 import '../../../profile/application/controllers/profile_controller.dart';
 import '../../../profile/application/providers/profile_providers.dart';
@@ -52,6 +53,7 @@ class NotificationController extends Notifier<NotificationActionState> {
           ref.read(transactionsStreamProvider).valueOrNull ?? const [];
       final invoices = ref.read(invoicesStreamProvider).valueOrNull ?? const [];
       final cardsById = ref.read(creditCardsByIdProvider);
+      final budgetInputs = ref.read(currentMonthBudgetAlertInputsProvider);
 
       final candidates = NotificationEvaluationService.evaluateSystemAlerts(
         transactions: transactions,
@@ -62,6 +64,7 @@ class NotificationController extends Notifier<NotificationActionState> {
         referenceDate: referenceDate ?? DateTime.now(),
         locale: profile?.localeCode ?? 'pt_BR',
         currencyCode: profile?.defaultCurrency ?? 'BRL',
+        budgets: budgetInputs,
       );
 
       final created =
