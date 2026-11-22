@@ -41,7 +41,7 @@ void main() {
     expect(find.text('Finance Control'), findsWidgets);
     expect(find.text('Esqueleto Etapa 0'), findsOneWidget);
     expect(find.byType(NavigationRail), findsOneWidget);
-    expect(find.text('Assistente IA'), findsWidgets);
+    expect(find.byTooltip('Assistente Financeiro IA'), findsOneWidget);
 
     // Navega para a aba Contas pelo NavigationRail.
     await tester.tap(
@@ -79,6 +79,8 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byType(NavigationBar), findsOneWidget);
+    expect(find.byType(FloatingActionButton), findsOneWidget);
+    expect(find.byTooltip('Assistente Financeiro IA'), findsOneWidget);
     expect(find.text('Esqueleto Etapa 0'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });

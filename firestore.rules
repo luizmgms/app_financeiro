@@ -5,8 +5,7 @@ rules_version = '2';
 // ===============================================================
 //
 // This security rules file enforces strict per-user isolation and
-// schema validation for Finance Control (Etapas 1, 2, 3, 4 & 5),
-// while preserving placeholder rules for upcoming feature collections.
+// schema validation for Finance Control (Etapas 1, 2, 3, 4, 5 & 6).
 //
 // Collection: users
 // Document ID: {userId} (must match request.auth.uid)
@@ -30,6 +29,8 @@ rules_version = '2';
 //   - reminderDaysBefore: int (optional, 1..30)
 //   - notificationsEnabled: bool (optional)
 //   - pushNotificationsEnabled: bool (optional)
+//   - aiAssistantEnabled: bool (optional)
+//   - aiShareFinancialContext: bool (optional)
 //   - createdAt: timestamp (optional, immutable once set)
 //   - updatedAt: timestamp (optional)
 //
@@ -199,6 +200,35 @@ rules_version = '2';
 // Optional / Nullable Fields:
 //   - notes: string (<= 500) | null
 //
+// Subcollection: users/{userId}/ai_interactions
+// Document ID: {interactionId}
+// Access: Owner read and delete only; client create/update denied
+//         (written exclusively by Admin SDK inside Cloud Functions `aiAssistantQuery`).
+// Fields:
+//   - mode: string ('chat' | 'receipt_image')
+//   - intent: string (optional, 'transaction_proposal' | 'clarification_needed' | 'analysis_answer')
+//   - model: string
+//   - status: string ('ok' | 'error')
+//   - promptPreview: string (optional, <= 160 chars)
+//   - replyPreview: string (optional, <= 240 chars)
+//   - hasSuggestion: bool (optional)
+//   - toolsUsed: list<string>
+//   - totalTokens: int (optional, >= 0)
+//   - latencyMs: int (>= 0)
+//   - createdAt: timestamp
+//
+// Subcollection: users/{userId}/ai_usage
+// Document ID: {usageId} (server uses 'quota')
+// Access: Owner read only; all client writes denied
+//         (written exclusively by Admin SDK inside Cloud Functions `aiAssistantQuery`).
+// Fields:
+//   - dayKey: string (YYYY-MM-DD in BRT)
+//   - dailyCount: int (>= 0)
+//   - windowBucket: int
+//   - windowCount: int (>= 0)
+//   - totalRequests: int (>= 0)
+//   - updatedAt: timestamp
+//
 // ===============================================================
 
 service cloud.firestore {
@@ -323,6 +353,8 @@ service cloud.firestore {
             'reminderDaysBefore',
             'notificationsEnabled',
             'pushNotificationsEnabled',
+            'aiAssistantEnabled',
+            'aiShareFinancialContext',
             'createdAt',
             'updatedAt'
           ])
@@ -342,6 +374,8 @@ service cloud.firestore {
           && (!('reminderDaysBefore' in data) || (data.reminderDaysBefore is int && data.reminderDaysBefore >= 1 && data.reminderDaysBefore <= 30))
           && (!('notificationsEnabled' in data) || data.notificationsEnabled is bool)
           && (!('pushNotificationsEnabled' in data) || data.pushNotificationsEnabled is bool)
+          && (!('aiAssistantEnabled' in data) || data.aiAssistantEnabled is bool)
+          && (!('aiShareFinancialContext' in data) || data.aiShareFinancialContext is bool)
           && (!('createdAt' in data) || data.createdAt is timestamp)
           && (!('updatedAt' in data) || data.updatedAt is timestamp);
     }
@@ -910,11 +944,18 @@ service cloud.firestore {
       }
 
       // =============================================================
-      // Future Feature Collections (Preserved Rules)
+      // Stage 6: AI Assistant Audit History & Rate-Limit Quota
+      // Written exclusively by Admin SDK inside Cloud Functions (`aiAssistantQuery`).
       // =============================================================
 
       match /ai_interactions/{interactionId} {
-        allow read, write: if isOwner(userId);
+        allow read, delete: if isOwner(userId);
+        allow create, update: if false;
+      }
+
+      match /ai_usage/{usageId} {
+        allow read: if isOwner(userId);
+        allow write: if false;
       }
     }
 

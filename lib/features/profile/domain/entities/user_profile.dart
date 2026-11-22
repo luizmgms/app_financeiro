@@ -14,6 +14,8 @@ class UserProfile extends Equatable {
     this.reminderDaysBefore = 3,
     this.notificationsEnabled = true,
     this.pushNotificationsEnabled = false,
+    this.aiAssistantEnabled = true,
+    this.aiShareFinancialContext = true,
     required this.createdAt,
     required this.updatedAt,
   });
@@ -28,6 +30,8 @@ class UserProfile extends Equatable {
   final int reminderDaysBefore;
   final bool notificationsEnabled;
   final bool pushNotificationsEnabled;
+  final bool aiAssistantEnabled;
+  final bool aiShareFinancialContext;
   final DateTime createdAt;
   final DateTime updatedAt;
 
@@ -41,6 +45,8 @@ class UserProfile extends Equatable {
     int? reminderDaysBefore,
     bool? notificationsEnabled,
     bool? pushNotificationsEnabled,
+    bool? aiAssistantEnabled,
+    bool? aiShareFinancialContext,
     DateTime? updatedAt,
   }) {
     return UserProfile(
@@ -55,6 +61,9 @@ class UserProfile extends Equatable {
       notificationsEnabled: notificationsEnabled ?? this.notificationsEnabled,
       pushNotificationsEnabled:
           pushNotificationsEnabled ?? this.pushNotificationsEnabled,
+      aiAssistantEnabled: aiAssistantEnabled ?? this.aiAssistantEnabled,
+      aiShareFinancialContext:
+          aiShareFinancialContext ?? this.aiShareFinancialContext,
       createdAt: createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
     );
@@ -72,6 +81,8 @@ class UserProfile extends Equatable {
         reminderDaysBefore,
         notificationsEnabled,
         pushNotificationsEnabled,
+        aiAssistantEnabled,
+        aiShareFinancialContext,
         createdAt,
         updatedAt,
       ];

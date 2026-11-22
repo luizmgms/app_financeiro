@@ -82,11 +82,11 @@ class AppShellScaffold extends StatelessWidget {
     final extendedSideNav = width >= AppConstants.desktopBreakpoint;
     final theme = Theme.of(context);
 
-    final aiFab = FloatingActionButton.extended(
+    final aiFab = FloatingActionButton(
       heroTag: 'ai-assistant-fab',
+      tooltip: 'Assistente Financeiro IA',
       onPressed: () => context.push(AppRoutes.aiAssistant),
-      icon: const Icon(Icons.auto_awesome_rounded),
-      label: const Text('Assistente IA'),
+      child: const Icon(Icons.auto_awesome_rounded),
     );
 
     if (!useSideNav) {

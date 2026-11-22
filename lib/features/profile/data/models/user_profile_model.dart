@@ -30,6 +30,9 @@ class UserProfileModel {
       notificationsEnabled: (data['notificationsEnabled'] as bool?) ?? true,
       pushNotificationsEnabled:
           (data['pushNotificationsEnabled'] as bool?) ?? false,
+      aiAssistantEnabled: (data['aiAssistantEnabled'] as bool?) ?? true,
+      aiShareFinancialContext:
+          (data['aiShareFinancialContext'] as bool?) ?? true,
       createdAt: createdRaw is Timestamp ? createdRaw.toDate() : now,
       updatedAt: updatedRaw is Timestamp ? updatedRaw.toDate() : now,
     );
@@ -47,6 +50,8 @@ class UserProfileModel {
       'reminderDaysBefore': profile.reminderDaysBefore.clamp(1, 30),
       'notificationsEnabled': profile.notificationsEnabled,
       'pushNotificationsEnabled': profile.pushNotificationsEnabled,
+      'aiAssistantEnabled': profile.aiAssistantEnabled,
+      'aiShareFinancialContext': profile.aiShareFinancialContext,
       'createdAt': FirestoreUtils.toMillisTimestamp(profile.createdAt),
       'updatedAt': FirestoreUtils.toMillisTimestamp(profile.updatedAt),
     };

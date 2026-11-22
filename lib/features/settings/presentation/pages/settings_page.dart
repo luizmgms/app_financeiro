@@ -10,6 +10,7 @@ import '../../../../shared/providers/locale_provider.dart';
 import '../../../../shared/providers/theme_mode_provider.dart';
 import '../../../authentication/application/controllers/auth_controller.dart';
 import '../../../authentication/application/providers/auth_providers.dart';
+import '../../../profile/application/controllers/profile_controller.dart';
 import '../../../profile/application/providers/profile_providers.dart';
 
 /// Página de configurações com sessão do usuário, alternância de tema (Material 3)
@@ -223,6 +224,68 @@ class SettingsPage extends ConsumerWidget {
                         ),
                         trailing: const Icon(Icons.chevron_right_rounded),
                         onTap: () => context.push(AppRoutes.notifications),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Card(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      ListTile(
+                        leading: const Icon(
+                          Icons.auto_awesome_rounded,
+                          color: AppColors.aiAccent,
+                        ),
+                        title: const Text('Privacidade e Assistente IA'),
+                        subtitle: const Text(
+                          'Somente metadados necessários são processados via Cloud Functions autenticadas.',
+                        ),
+                        trailing: IconButton(
+                          tooltip: 'Abrir Assistente IA',
+                          onPressed: () => context.push(AppRoutes.aiAssistant),
+                          icon: const Icon(Icons.open_in_new_rounded),
+                        ),
+                      ),
+                      const Divider(height: 1),
+                      SwitchListTile.adaptive(
+                        value: userProfile?.aiAssistantEnabled ?? true,
+                        onChanged: userProfile == null
+                            ? null
+                            : (enabled) {
+                                ref
+                                    .read(profileControllerProvider.notifier)
+                                    .updateAiPreferences(
+                                      currentProfile: userProfile,
+                                      aiAssistantEnabled: enabled,
+                                    );
+                              },
+                        title: const Text('Ativar Assistente Financeiro IA'),
+                        subtitle: const Text(
+                          'Permite interpretar texto, voz e comprovantes sempre com confirmação manual.',
+                        ),
+                      ),
+                      const Divider(height: 1),
+                      SwitchListTile.adaptive(
+                        value: userProfile?.aiShareFinancialContext ?? true,
+                        onChanged: userProfile == null ||
+                                !(userProfile.aiAssistantEnabled)
+                            ? null
+                            : (share) {
+                                ref
+                                    .read(profileControllerProvider.notifier)
+                                    .updateAiPreferences(
+                                      currentProfile: userProfile,
+                                      aiShareFinancialContext: share,
+                                    );
+                              },
+                        title: const Text(
+                          'Consultas sobre dados reais do Firestore',
+                        ),
+                        subtitle: const Text(
+                          'Autoriza ferramentas de leitura (resumos, faturas e metas) para perguntas no chat.',
+                        ),
                       ),
                     ],
                   ),

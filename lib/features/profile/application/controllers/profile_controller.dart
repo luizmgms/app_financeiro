@@ -132,6 +132,37 @@ class ProfileController extends Notifier<ProfileActionState> {
     }
   }
 
+  Future<bool> updateAiPreferences({
+    required UserProfile currentProfile,
+    bool? aiAssistantEnabled,
+    bool? aiShareFinancialContext,
+  }) async {
+    state = const ProfileActionState(isLoading: true);
+    try {
+      final updated = currentProfile.copyWith(
+        aiAssistantEnabled:
+            aiAssistantEnabled ?? currentProfile.aiAssistantEnabled,
+        aiShareFinancialContext:
+            aiShareFinancialContext ?? currentProfile.aiShareFinancialContext,
+        updatedAt: DateTime.now(),
+      );
+
+      await ref.read(profileRepositoryProvider).updateProfile(updated);
+      state = const ProfileActionState(
+        successMessage: 'Preferências de privacidade do Assistente IA atualizadas.',
+      );
+      return true;
+    } on Failure catch (failure) {
+      state = ProfileActionState(errorMessage: failure.message);
+      return false;
+    } catch (_) {
+      state = const ProfileActionState(
+        errorMessage: 'Não foi possível atualizar preferências do Assistente IA.',
+      );
+      return false;
+    }
+  }
+
   Future<bool> changePassword({
     required String currentPassword,
     required String newPassword,

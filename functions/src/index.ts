@@ -1,7 +1,13 @@
 import * as admin from "firebase-admin";
+import { requiresAPI } from "firebase-functions";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { onSchedule } from "firebase-functions/v2/scheduler";
 import { logger } from "firebase-functions/v2";
+import {
+  getAccountingMonthWindow,
+  resolveAccountingYearMonth,
+} from "./accounting_utils";
+import { handleAiAssistantRequest } from "./ai_assistant";
 import {
   AlertCandidate,
   BudgetSnapshotInput,
@@ -15,6 +21,11 @@ import {
   resolveInvoiceTarget,
   TransactionSnapshotInput,
 } from "./schedule_utils";
+
+requiresAPI(
+  "aiplatform.googleapis.com",
+  "Needed to query Vertex AI Gemini models for the Financial AI Assistant",
+);
 
 if (admin.apps.length === 0) {
   admin.initializeApp();
@@ -339,45 +350,14 @@ async function syncUserAutomation(
       Math.max(Number(profileData.monthStartDay ?? 1), 1),
       28,
     );
-    const saoPauloDay = new Intl.DateTimeFormat("en-CA", {
-      timeZone: "America/Sao_Paulo",
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-    })
-      .format(referenceDate)
-      .split("-")
-      .map(Number);
-    let curYear = saoPauloDay[0];
-    let curMonth = saoPauloDay[1];
-    if (monthStartDay > 1 && saoPauloDay[2] < monthStartDay) {
-      const prev = new Date(Date.UTC(curYear, curMonth - 2, 1));
-      curYear = prev.getUTCFullYear();
-      curMonth = prev.getUTCMonth() + 1;
-    }
-
-    const maxStartDay = new Date(Date.UTC(curYear, curMonth, 0)).getUTCDate();
-    const safeStartDay = Math.min(monthStartDay, maxStartDay);
-    const nextAnchor = new Date(Date.UTC(curYear, curMonth, 1));
-    const maxNextDay = new Date(
-      Date.UTC(nextAnchor.getUTCFullYear(), nextAnchor.getUTCMonth() + 1, 0),
-    ).getUTCDate();
-    const safeNextDay = Math.min(monthStartDay, maxNextDay);
-
-    // Meia-noite BRT (-03:00) equivale a 03:00 UTC.
-    const cycleStart = new Date(
-      Date.UTC(curYear, curMonth - 1, safeStartDay, 3, 0, 0, 0),
+    const { year: curYear, month: curMonth } = resolveAccountingYearMonth(
+      referenceDate,
+      monthStartDay,
     );
-    const cycleEnd = new Date(
-      Date.UTC(
-        nextAnchor.getUTCFullYear(),
-        nextAnchor.getUTCMonth(),
-        safeNextDay,
-        2,
-        59,
-        59,
-        999,
-      ),
+    const { start: cycleStart, end: cycleEnd } = getAccountingMonthWindow(
+      curYear,
+      curMonth,
+      monthStartDay,
     );
     const monthTxSnap = await userRef
       .collection("transactions")
@@ -562,5 +542,34 @@ export const syncAutomationOnDemand = onCall(
       throw new HttpsError("unauthenticated", "Usuário não autenticado.");
     }
     return syncUserAutomation(request.auth.uid, new Date());
+  },
+);
+
+/**
+ * Endpoint autenticado do Assistente Financeiro IA (Módulo 23 — Google Gemini).
+ * Valida Firebase ID Token, preferências de privacidade, rate limit diário e de rajada,
+ * executa Function Calling exclusivamente de leitura e retorna JSON validado.
+ */
+export const aiAssistantQuery = onCall(
+  {
+    region: REGION,
+    cors: true,
+    timeoutSeconds: 60,
+    memory: "512MiB",
+    maxInstances: 20,
+  },
+  async (request) => {
+    if (!request.auth?.uid) {
+      throw new HttpsError("unauthenticated", "Usuário não autenticado.");
+    }
+    const data =
+      request.data && typeof request.data === "object"
+        ? (request.data as Record<string, unknown>)
+        : {};
+    return handleAiAssistantRequest({
+      db,
+      uid: request.auth.uid,
+      requestData: data,
+    });
   },
 );
