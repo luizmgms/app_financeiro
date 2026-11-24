@@ -5,7 +5,7 @@ rules_version = '2';
 // ===============================================================
 //
 // This security rules file enforces strict per-user isolation and
-// schema validation for Finance Control (Etapas 1, 2, 3, 4, 5 & 6).
+// schema validation for Finance Control (Etapas 1 a 7).
 //
 // Collection: users
 // Document ID: {userId} (must match request.auth.uid)
@@ -53,8 +53,8 @@ rules_version = '2';
 //   - name: string (required, 1..60 chars)
 //   - institution: string (required, 0..80 chars)
 //   - type: string (required, 'checking' | 'savings' | 'cash' | 'digital_wallet' | 'investment' | 'custom')
-//   - initialBalanceCents: int (required)
-//   - currentBalanceCents: int (required)
+//   - initialBalanceCents: int (required, -100000000000..100000000000)
+//   - currentBalanceCents: int (required, -100000000000..100000000000)
 //   - colorHex: string (required, 4..9 chars)
 //   - iconName: string (required, 1..60 chars)
 //   - openedAt: timestamp (required)
@@ -67,7 +67,7 @@ rules_version = '2';
 // Required Fields:
 //   - kind: string ('income' | 'expense' | 'transfer' | 'card_purchase' | 'card_refund' | 'invoice_payment')
 //   - description: string (1..120 chars)
-//   - amountCents: int (> 0)
+//   - amountCents: int (1..100000000000)
 //   - competencyDate: timestamp
 //   - status: string ('paid' | 'received' | 'pending' | 'overdue' | 'completed')
 //   - createdAt: timestamp (immutable)
@@ -81,13 +81,13 @@ rules_version = '2';
 //   - dueDate: timestamp | null
 //   - paymentDate: timestamp | null
 //   - notes: string (<= 500) | null
-//   - attachments: list (<= 10 attachment metadata maps) | null
-//   - attachmentUrls: list (<= 10 http/https URL strings) | null
+//   - attachments: list (<= 10 attachment metadata maps; slots 0 and last validated) | null
+//   - attachmentUrls: list (<= 10 http/https URL strings; slots 0 and last validated) | null
 //   - cardId: string (<= 128) | null
 //   - invoiceId: string (<= 128) | null
 //   - installmentPlanId: string (<= 128) | null
-//   - installmentNumber: int (>= 0) | null
-//   - totalInstallments: int (>= 0) | null
+//   - installmentNumber: int (0..48) | null
+//   - totalInstallments: int (0..48) | null
 //   - recurringId: string (<= 128) | null
 //   - occurrenceKey: string (<= 128) | null
 //
@@ -97,8 +97,8 @@ rules_version = '2';
 //   - name: string (1..60 chars)
 //   - institution: string (0..80 chars)
 //   - brand: string ('visa' | 'mastercard' | 'elo' | 'amex' | 'hipercard' | 'other')
-//   - totalLimitCents: int (>= 0)
-//   - usedLimitCents: int (>= 0)
+//   - totalLimitCents: int (0..100000000000)
+//   - usedLimitCents: int (0..100000000000)
 //   - closingDay: int (1..31)
 //   - dueDay: int (1..31)
 //   - colorHex: string (4..9 chars)
@@ -117,8 +117,8 @@ rules_version = '2';
 //   - referenceMonth: int (1..12)
 //   - closingDate: timestamp
 //   - dueDate: timestamp
-//   - totalAmountCents: int (>= 0)
-//   - paidAmountCents: int (>= 0)
+//   - totalAmountCents: int (0..100000000000)
+//   - paidAmountCents: int (0..100000000000)
 //   - status: string ('open' | 'closed' | 'paid' | 'overdue')
 //   - createdAt: timestamp (immutable)
 //   - updatedAt: timestamp
@@ -130,7 +130,7 @@ rules_version = '2';
 // Document ID: {installmentId}
 // Required Fields:
 //   - description: string (1..120 chars)
-//   - totalAmountCents: int (> 0)
+//   - totalAmountCents: int (1..100000000000)
 //   - installmentCount: int (1..48)
 //   - firstCompetencyDate: timestamp
 //   - firstDueDate: timestamp
@@ -148,7 +148,7 @@ rules_version = '2';
 // Required Fields:
 //   - description: string (1..120 chars)
 //   - kind: string ('income' | 'expense')
-//   - amountCents: int (> 0)
+//   - amountCents: int (1..100000000000)
 //   - isVariableAmount: bool
 //   - categoryId: string (1..128 chars)
 //   - frequency: string ('daily' | 'weekly' | 'biweekly' | 'monthly' | 'bimonthly' | 'quarterly' | 'semiannual' | 'annual' | 'custom')
@@ -162,7 +162,7 @@ rules_version = '2';
 //   - customIntervalDays: int (1..3650) | null
 //   - endDate: timestamp | null
 //   - lastGeneratedKey: string (<= 128) | null
-//   - skippedOccurrenceKeys: list (<= 200 items, optional)
+//   - skippedOccurrenceKeys: list (<= 200 items, optional; slots 0 and last validated)
 //   - notes: string (<= 500) | null
 //
 // Subcollection: users/{userId}/notifications
@@ -193,7 +193,7 @@ rules_version = '2';
 //   - categoryId: string (1..128 chars)
 //   - year: int (2000..2200)
 //   - month: int (1..12)
-//   - limitCents: int (> 0)
+//   - limitCents: int (1..100000000000)
 //   - alertThresholdPercent: int (1..100)
 //   - createdAt: timestamp (immutable)
 //   - updatedAt: timestamp
@@ -252,9 +252,16 @@ service cloud.firestore {
     }
 
     function uidNotModified() {
-      return !('uid' in request.resource.data)
-          || !('uid' in resource.data)
-          || request.resource.data.uid == resource.data.uid;
+      return (!('uid' in resource.data) && uidUnchanged())
+          || ('uid' in resource.data
+              && 'uid' in request.resource.data
+              && request.resource.data.uid == resource.data.uid);
+    }
+
+    function optionalCreatedAtImmutable() {
+      return !('createdAt' in resource.data)
+          || ('createdAt' in request.resource.data
+              && request.resource.data.createdAt == resource.data.createdAt);
     }
 
     function hasRequiredFields(data, fields) {
@@ -280,15 +287,14 @@ service cloud.firestore {
     function isValidUrl(url) {
       return url is string
           && url.size() <= 2048
-          && (url.matches("^https://.*") || url.matches("^http://.*"));
+          && url.matches("^https?://[^\\s]+$");
     }
 
-    function isScopedUserPath(path, userId) {
-      return path is string
-          && path.size() <= 512
-          && path.matches("^users/" + userId + "/.*")
-          && !('..' in path.split('/'))
-          && !path.matches(".*[.][.].*");
+    function isValidHexColor(color) {
+      return color is string
+          && color.size() >= 4
+          && color.size() <= 9
+          && color.matches("^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$");
     }
 
     function isValidNullableString(data, field, maxLen) {
@@ -303,14 +309,28 @@ service cloud.firestore {
           || data[field] is timestamp;
     }
 
-    function isValidNullableNonNegativeInt(data, field) {
-      return !(field in data)
-          || data[field] == null
-          || (data[field] is int && data[field] >= 0);
+    function isValidPositiveMoneyCents(value) {
+      return value is int && value > 0 && value <= 100000000000;
     }
 
-    function areImmutableFieldsUnchanged(fields) {
-      return !request.resource.data.diff(resource.data).affectedKeys().hasAny(fields);
+    function isValidNonNegativeMoneyCents(value) {
+      return value is int && value >= 0 && value <= 100000000000;
+    }
+
+    function isValidSignedMoneyCents(value) {
+      return value is int && value >= -100000000000 && value <= 100000000000;
+    }
+
+    function isValidNullableIntRange(data, field, minVal, maxVal) {
+      return !(field in data)
+          || data[field] == null
+          || (data[field] is int && data[field] >= minVal && data[field] <= maxVal);
+    }
+
+    function isCreatedAtUnchanged() {
+      return 'createdAt' in request.resource.data
+          && 'createdAt' in resource.data
+          && request.resource.data.createdAt == resource.data.createdAt;
     }
 
     // ===============================================================
@@ -366,7 +386,7 @@ service cloud.firestore {
           && (data.email.size() == 0 || isValidEmail(data.email))
           && (!('photoUrl' in data) || data.photoUrl == null || (data.photoUrl is string && (data.photoUrl.size() == 0 || isValidUrl(data.photoUrl))))
           && data.defaultCurrency is string
-          && data.defaultCurrency.size() == 3
+          && data.defaultCurrency.matches("^[A-Z]{3}$")
           && validStringLength(data, 'localeCode', 2, 20)
           && data.monthStartDay is int
           && data.monthStartDay >= 1
@@ -408,7 +428,7 @@ service cloud.firestore {
           && data.type is string
           && data.type in ['income', 'expense']
           && validStringLength(data, 'iconName', 1, 60)
-          && validStringLength(data, 'colorHex', 4, 9)
+          && isValidHexColor(data.colorHex)
           && data.isDefault is bool
           && data.isActive is bool
           && data.createdAt is timestamp
@@ -446,9 +466,9 @@ service cloud.firestore {
           && validStringLength(data, 'institution', 0, 80)
           && data.type is string
           && data.type in ['checking', 'savings', 'cash', 'digital_wallet', 'investment', 'custom']
-          && data.initialBalanceCents is int
-          && data.currentBalanceCents is int
-          && validStringLength(data, 'colorHex', 4, 9)
+          && isValidSignedMoneyCents(data.initialBalanceCents)
+          && isValidSignedMoneyCents(data.currentBalanceCents)
+          && isValidHexColor(data.colorHex)
           && validStringLength(data, 'iconName', 1, 60)
           && data.openedAt is timestamp
           && data.isActive is bool
@@ -458,47 +478,39 @@ service cloud.firestore {
 
     function isValidAttachment(item, userId) {
       return item is map
+          && item.size() == 6
           && item.keys().hasOnly(['id', 'name', 'url', 'storagePath', 'contentType', 'sizeBytes'])
           && item.id is string && item.id.size() > 0 && item.id.size() <= 128
           && item.name is string && item.name.size() > 0 && item.name.size() <= 255
-          && isValidUrl(item.url)
-          && isScopedUserPath(item.storagePath, userId)
+          && item.url is string && item.url.size() <= 2048 && item.url.matches("^https?://[^\\s]+$")
+          && item.storagePath is string && item.storagePath.size() <= 512 && item.storagePath.matches("^users/" + userId + "/[^/].*") && !item.storagePath.matches(".*(\\.\\.|\\\\).*")
           && item.contentType is string && item.contentType.size() > 0 && item.contentType.size() <= 128
-          && item.sizeBytes is number && item.sizeBytes >= 0 && item.sizeBytes <= 10485760;
+          && item.sizeBytes is int && item.sizeBytes >= 0 && item.sizeBytes <= 10485760;
     }
 
-    function isValidAttachmentChunk(list, start, userId) {
-      return (list.size() <= start || isValidAttachment(list[start], userId))
-          && (list.size() <= start + 1 || isValidAttachment(list[start + 1], userId))
-          && (list.size() <= start + 2 || isValidAttachment(list[start + 2], userId))
-          && (list.size() <= start + 3 || isValidAttachment(list[start + 3], userId))
-          && (list.size() <= start + 4 || isValidAttachment(list[start + 4], userId));
+    function isValidAttachmentTail(item, userId) {
+      return item is map
+          && item.size() == 6
+          && item.storagePath is string
+          && item.storagePath.matches("^users/" + userId + "/[^/].*")
+          && !item.storagePath.matches(".*(\\.\\.|\\\\).*")
+          && item.sizeBytes is int && item.sizeBytes >= 0 && item.sizeBytes <= 10485760;
     }
 
     function isValidAttachmentList(list, userId) {
-      return list is list
-          && list.size() <= 10
-          && isValidAttachmentChunk(list, 0, userId)
-          && isValidAttachmentChunk(list, 5, userId);
-    }
-
-    function isValidAttachmentUrlChunk(list, start) {
-      return (list.size() <= start || isValidUrl(list[start]))
-          && (list.size() <= start + 1 || isValidUrl(list[start + 1]))
-          && (list.size() <= start + 2 || isValidUrl(list[start + 2]))
-          && (list.size() <= start + 3 || isValidUrl(list[start + 3]))
-          && (list.size() <= start + 4 || isValidUrl(list[start + 4]));
+      return list.size() <= 10
+          && (list.size() == 0 || isValidAttachment(list[0], userId))
+          && (list.size() <= 1 || isValidAttachmentTail(list[list.size() - 1], userId));
     }
 
     function isValidAttachmentUrlList(list) {
-      return list is list
-          && list.size() <= 10
-          && isValidAttachmentUrlChunk(list, 0)
-          && isValidAttachmentUrlChunk(list, 5);
+      return list.size() <= 10
+          && (list.size() == 0 || isValidUrl(list[0]))
+          && (list.size() <= 1 || (list[list.size() - 1] is string && list[list.size() - 1].size() <= 2048));
     }
 
     function isValidTransaction(data, userId) {
-      return hasRequiredFields(data, [
+      return data.keys().hasAll([
             'kind',
             'description',
             'amountCents',
@@ -507,7 +519,7 @@ service cloud.firestore {
             'createdAt',
             'updatedAt'
           ])
-          && hasOnlyAllowedFields(data, [
+          && data.keys().hasOnly([
             'kind',
             'description',
             'amountCents',
@@ -533,13 +545,10 @@ service cloud.firestore {
             'createdAt',
             'updatedAt'
           ])
-          && data.kind is string
           && data.kind in ['income', 'expense', 'transfer', 'card_purchase', 'card_refund', 'invoice_payment']
-          && validStringLength(data, 'description', 1, 120)
-          && data.amountCents is int
-          && data.amountCents > 0
+          && data.description is string && data.description.size() >= 1 && data.description.size() <= 120
+          && data.amountCents is int && data.amountCents > 0 && data.amountCents <= 100000000000
           && data.competencyDate is timestamp
-          && data.status is string
           && data.status in ['paid', 'received', 'pending', 'overdue', 'completed']
           && data.createdAt is timestamp
           && data.updatedAt is timestamp
@@ -547,19 +556,19 @@ service cloud.firestore {
           && isValidNullableString(data, 'accountId', 128)
           && isValidNullableString(data, 'destinationAccountId', 128)
           && isValidNullableString(data, 'transferGroupId', 128)
-          && (!('transferDirection' in data) || data.transferDirection == null || (data.transferDirection is string && data.transferDirection in ['out', 'in']))
+          && (!('transferDirection' in data) || data.transferDirection == null || data.transferDirection in ['out', 'in'])
           && isValidNullableTimestamp(data, 'dueDate')
           && isValidNullableTimestamp(data, 'paymentDate')
           && isValidNullableString(data, 'notes', 500)
-          && (!('attachments' in data) || data.attachments == null || isValidAttachmentList(data.attachments, userId))
-          && (!('attachmentUrls' in data) || data.attachmentUrls == null || isValidAttachmentUrlList(data.attachmentUrls))
           && isValidNullableString(data, 'cardId', 128)
           && isValidNullableString(data, 'invoiceId', 128)
           && isValidNullableString(data, 'installmentPlanId', 128)
-          && isValidNullableNonNegativeInt(data, 'installmentNumber')
-          && isValidNullableNonNegativeInt(data, 'totalInstallments')
+          && isValidNullableIntRange(data, 'installmentNumber', 0, 48)
+          && isValidNullableIntRange(data, 'totalInstallments', 0, 48)
           && isValidNullableString(data, 'recurringId', 128)
-          && isValidNullableString(data, 'occurrenceKey', 128);
+          && isValidNullableString(data, 'occurrenceKey', 128)
+          && (!('attachments' in data) || data.attachments == null || (data.attachments is list && isValidAttachmentList(data.attachments, userId)))
+          && (!('attachmentUrls' in data) || data.attachmentUrls == null || (data.attachmentUrls is list && isValidAttachmentUrlList(data.attachmentUrls)));
     }
 
     function isValidCreditCard(data) {
@@ -596,12 +605,12 @@ service cloud.firestore {
           && validStringLength(data, 'institution', 0, 80)
           && data.brand is string
           && data.brand in ['visa', 'mastercard', 'elo', 'amex', 'hipercard', 'other']
-          && data.totalLimitCents is int && data.totalLimitCents >= 0
-          && data.usedLimitCents is int && data.usedLimitCents >= 0
+          && isValidNonNegativeMoneyCents(data.totalLimitCents)
+          && isValidNonNegativeMoneyCents(data.usedLimitCents)
           && data.closingDay is int && data.closingDay >= 1 && data.closingDay <= 31
           && data.dueDay is int && data.dueDay >= 1 && data.dueDay <= 31
           && isValidNullableString(data, 'paymentAccountId', 128)
-          && validStringLength(data, 'colorHex', 4, 9)
+          && isValidHexColor(data.colorHex)
           && data.defaultInstallments is int && data.defaultInstallments >= 1 && data.defaultInstallments <= 48
           && data.isActive is bool
           && data.createdAt is timestamp
@@ -640,8 +649,8 @@ service cloud.firestore {
           && data.referenceMonth is int && data.referenceMonth >= 1 && data.referenceMonth <= 12
           && data.closingDate is timestamp
           && data.dueDate is timestamp
-          && data.totalAmountCents is int && data.totalAmountCents >= 0
-          && data.paidAmountCents is int && data.paidAmountCents >= 0
+          && isValidNonNegativeMoneyCents(data.totalAmountCents)
+          && isValidNonNegativeMoneyCents(data.paidAmountCents)
           && data.status is string
           && data.status in ['open', 'closed', 'paid', 'overdue']
           && isValidNullableString(data, 'paymentTransactionId', 128)
@@ -677,7 +686,7 @@ service cloud.firestore {
             'updatedAt'
           ])
           && validStringLength(data, 'description', 1, 120)
-          && data.totalAmountCents is int && data.totalAmountCents > 0
+          && isValidPositiveMoneyCents(data.totalAmountCents)
           && data.installmentCount is int && data.installmentCount >= 1 && data.installmentCount <= 48
           && data.firstCompetencyDate is timestamp
           && data.firstDueDate is timestamp
@@ -689,6 +698,16 @@ service cloud.firestore {
           && data.status in ['active', 'completed', 'canceled']
           && data.createdAt is timestamp
           && data.updatedAt is timestamp;
+    }
+
+    function isValidSkippedKeyItem(val) {
+      return val is string && val.size() > 0 && val.size() <= 128;
+    }
+
+    function isValidSkippedOccurrenceKeys(list) {
+      return list.size() <= 200
+          && (list.size() == 0 || isValidSkippedKeyItem(list[0]))
+          && (list.size() <= 1 || isValidSkippedKeyItem(list[list.size() - 1]));
     }
 
     function isValidRecurringRule(data) {
@@ -726,7 +745,7 @@ service cloud.firestore {
           && validStringLength(data, 'description', 1, 120)
           && data.kind is string
           && data.kind in ['income', 'expense']
-          && data.amountCents is int && data.amountCents > 0
+          && isValidPositiveMoneyCents(data.amountCents)
           && data.isVariableAmount is bool
           && validStringLength(data, 'categoryId', 1, 128)
           && isValidNullableString(data, 'accountId', 128)
@@ -739,7 +758,7 @@ service cloud.firestore {
           && data.status is string
           && data.status in ['active', 'paused', 'canceled']
           && isValidNullableString(data, 'lastGeneratedKey', 128)
-          && (!('skippedOccurrenceKeys' in data) || (data.skippedOccurrenceKeys is list && data.skippedOccurrenceKeys.size() <= 200))
+          && (!('skippedOccurrenceKeys' in data) || (data.skippedOccurrenceKeys is list && isValidSkippedOccurrenceKeys(data.skippedOccurrenceKeys)))
           && isValidNullableString(data, 'notes', 500)
           && data.createdAt is timestamp
           && data.updatedAt is timestamp;
@@ -821,7 +840,7 @@ service cloud.firestore {
           && validStringLength(data, 'categoryId', 1, 128)
           && data.year is int && data.year >= 2000 && data.year <= 2200
           && data.month is int && data.month >= 1 && data.month <= 12
-          && data.limitCents is int && data.limitCents > 0
+          && isValidPositiveMoneyCents(data.limitCents)
           && data.alertThresholdPercent is int && data.alertThresholdPercent >= 1 && data.alertThresholdPercent <= 100
           && isValidNullableString(data, 'notes', 500)
           && data.createdAt is timestamp
@@ -839,8 +858,8 @@ service cloud.firestore {
           && isValidUser(request.resource.data, userId);
       allow update: if isOwner(userId)
           && uidNotModified()
-          && isValidUser(request.resource.data, userId)
-          && (!('createdAt' in resource.data) || request.resource.data.createdAt == resource.data.createdAt);
+          && optionalCreatedAtImmutable()
+          && isValidUser(request.resource.data, userId);
 
       match /profile/{profileId} {
         allow read, delete: if isOwner(userId);
@@ -849,8 +868,8 @@ service cloud.firestore {
             && isValidProfile(request.resource.data);
         allow update: if isOwner(userId)
             && uidNotModified()
-            && isValidProfile(request.resource.data)
-            && (!('createdAt' in resource.data) || request.resource.data.createdAt == resource.data.createdAt);
+            && optionalCreatedAtImmutable()
+            && isValidProfile(request.resource.data);
       }
 
       match /categories/{categoryId} {
@@ -858,8 +877,8 @@ service cloud.firestore {
         allow create: if isOwner(userId)
             && isValidCategory(request.resource.data);
         allow update: if isOwner(userId)
-            && isValidCategory(request.resource.data)
-            && areImmutableFieldsUnchanged(['createdAt']);
+            && isCreatedAtUnchanged()
+            && isValidCategory(request.resource.data);
       }
 
       match /accounts/{accountId} {
@@ -867,8 +886,8 @@ service cloud.firestore {
         allow create: if isOwner(userId)
             && isValidAccount(request.resource.data);
         allow update: if isOwner(userId)
-            && isValidAccount(request.resource.data)
-            && areImmutableFieldsUnchanged(['createdAt']);
+            && isCreatedAtUnchanged()
+            && isValidAccount(request.resource.data);
       }
 
       match /transactions/{transactionId} {
@@ -876,8 +895,8 @@ service cloud.firestore {
         allow create: if isOwner(userId)
             && isValidTransaction(request.resource.data, userId);
         allow update: if isOwner(userId)
-            && isValidTransaction(request.resource.data, userId)
-            && areImmutableFieldsUnchanged(['createdAt']);
+            && isCreatedAtUnchanged()
+            && isValidTransaction(request.resource.data, userId);
       }
 
       match /credit_cards/{cardId} {
@@ -885,8 +904,8 @@ service cloud.firestore {
         allow create: if isOwner(userId)
             && isValidCreditCard(request.resource.data);
         allow update: if isOwner(userId)
-            && isValidCreditCard(request.resource.data)
-            && areImmutableFieldsUnchanged(['createdAt']);
+            && isCreatedAtUnchanged()
+            && isValidCreditCard(request.resource.data);
       }
 
       match /invoices/{invoiceId} {
@@ -894,8 +913,8 @@ service cloud.firestore {
         allow create: if isOwner(userId)
             && isValidInvoice(request.resource.data);
         allow update: if isOwner(userId)
-            && isValidInvoice(request.resource.data)
-            && areImmutableFieldsUnchanged(['createdAt']);
+            && isCreatedAtUnchanged()
+            && isValidInvoice(request.resource.data);
       }
 
       match /installments/{installmentId} {
@@ -903,8 +922,8 @@ service cloud.firestore {
         allow create: if isOwner(userId)
             && isValidInstallmentPlan(request.resource.data);
         allow update: if isOwner(userId)
-            && isValidInstallmentPlan(request.resource.data)
-            && areImmutableFieldsUnchanged(['createdAt']);
+            && isCreatedAtUnchanged()
+            && isValidInstallmentPlan(request.resource.data);
       }
 
       match /recurring/{recurringId} {
@@ -912,8 +931,8 @@ service cloud.firestore {
         allow create: if isOwner(userId)
             && isValidRecurringRule(request.resource.data);
         allow update: if isOwner(userId)
-            && isValidRecurringRule(request.resource.data)
-            && areImmutableFieldsUnchanged(['createdAt']);
+            && isCreatedAtUnchanged()
+            && isValidRecurringRule(request.resource.data);
       }
 
       match /notifications/{notificationId} {
@@ -921,8 +940,8 @@ service cloud.firestore {
         allow create: if isOwner(userId)
             && isValidNotification(request.resource.data);
         allow update: if isOwner(userId)
-            && isValidNotification(request.resource.data)
-            && areImmutableFieldsUnchanged(['createdAt']);
+            && isCreatedAtUnchanged()
+            && isValidNotification(request.resource.data);
       }
 
       match /notification_devices/{deviceId} {
@@ -930,8 +949,8 @@ service cloud.firestore {
         allow create: if isOwner(userId)
             && isValidNotificationDevice(request.resource.data);
         allow update: if isOwner(userId)
-            && isValidNotificationDevice(request.resource.data)
-            && areImmutableFieldsUnchanged(['createdAt']);
+            && isCreatedAtUnchanged()
+            && isValidNotificationDevice(request.resource.data);
       }
 
       match /budgets/{budgetId} {
@@ -939,8 +958,8 @@ service cloud.firestore {
         allow create: if isOwner(userId)
             && isValidBudget(request.resource.data);
         allow update: if isOwner(userId)
-            && isValidBudget(request.resource.data)
-            && areImmutableFieldsUnchanged(['createdAt']);
+            && isCreatedAtUnchanged()
+            && isValidBudget(request.resource.data);
       }
 
       // =============================================================

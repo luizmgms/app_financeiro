@@ -5,16 +5,19 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/routes/app_routes.dart';
-import '../../../../core/services/firebase_bootstrap_service.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/utils/color_utils.dart';
 import '../../../../core/utils/currency_formatter.dart';
 import '../../../../core/utils/date_formatter.dart';
-import '../../../../core/utils/platform_info.dart';
+import '../../../../core/utils/icon_catalog.dart';
 import '../../../../core/widgets/status_badge.dart';
 import '../../../../shared/models/date_period.dart';
 import '../../../../shared/providers/app_bootstrap_provider.dart';
 import '../../../../shared/widgets/summary_metric_card.dart';
 import '../../../accounts/application/providers/account_providers.dart';
+import '../../../accounts/domain/entities/account_entity.dart';
+import '../../../accounts/presentation/pages/account_statement_page.dart';
+import '../../../accounts/presentation/widgets/account_form_dialog.dart';
 import '../../../accounts/presentation/widgets/transfer_form_dialog.dart';
 import '../../../authentication/application/providers/auth_providers.dart';
 import '../../../budgets/application/providers/budget_providers.dart';
@@ -154,13 +157,6 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
       monthStartDay: monthStartDay,
     );
 
-    final firebaseColor = switch (bootstrap.firebase.status) {
-      FirebaseConnectionStatus.connected => AppColors.income,
-      FirebaseConnectionStatus.awaitingConfiguration => AppColors.warning,
-      FirebaseConnectionStatus.unsupportedPlatform => AppColors.transfer,
-      FirebaseConnectionStatus.error => AppColors.expense,
-    };
-
     String fmt(int cents) => CurrencyFormatter.formatCents(
           cents,
           locale: locale,
@@ -212,88 +208,99 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
         ],
       ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(20, 12, 20, 96),
+        padding: const EdgeInsets.fromLTRB(16, 10, 16, 96),
         child: Center(
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 1120),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                _EnvironmentBannerCard(
-                  bootstrap: bootstrap,
-                  statusColor: firebaseColor,
-                ),
-                const SizedBox(height: 12),
+                if (bootstrap.firebase.isReady || accounts.isNotEmpty) ...[
+                  _AccountsBalancesCard(
+                    accounts: activeAccounts,
+                    archivedCount: accounts.length - activeAccounts.length,
+                    totalBalanceCents: snapshot.totalBalanceCents,
+                    formatMoney: fmt,
+                    onManageAccounts: () => context.go(AppRoutes.accounts),
+                    onAddAccount: () => showAccountFormDialog(context),
+                    onOpenAccount: (account) {
+                      Navigator.of(context).push(
+                        MaterialPageRoute<void>(
+                          builder: (_) => AccountStatementPage(
+                            accountId: account.id,
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                  const SizedBox(height: 12),
+                ],
                 if (bootstrap.firebase.isReady) ...[
                   Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
+                    spacing: 6,
+                    runSpacing: 6,
                     children: [
-                      FilledButton.tonalIcon(
+                      _CompactQuickActionButton(
+                        label: 'Nova receita',
+                        icon: Icons.trending_up_rounded,
+                        iconColor: AppColors.income,
                         onPressed: () => showTransactionFormDialog(
                           context,
                           initialKind: TransactionKind.income,
                         ),
-                        icon: const Icon(
-                          Icons.trending_up_rounded,
-                          color: AppColors.income,
-                        ),
-                        label: const Text('Nova receita'),
                       ),
-                      FilledButton.tonalIcon(
+                      _CompactQuickActionButton(
+                        label: 'Nova despesa',
+                        icon: Icons.trending_down_rounded,
+                        iconColor: AppColors.expense,
                         onPressed: () => showTransactionFormDialog(
                           context,
                           initialKind: TransactionKind.expense,
                         ),
-                        icon: const Icon(
-                          Icons.trending_down_rounded,
-                          color: AppColors.expense,
-                        ),
-                        label: const Text('Nova despesa'),
                       ),
                       if (activeCards.isNotEmpty)
-                        FilledButton.tonalIcon(
+                        _CompactQuickActionButton(
+                          label: 'Compra no cartão',
+                          icon: Icons.credit_card_rounded,
+                          iconColor: AppColors.credit,
                           onPressed: () => showCardPurchaseFormDialog(context),
-                          icon: const Icon(
-                            Icons.credit_card_rounded,
-                            color: AppColors.credit,
-                          ),
-                          label: const Text('Compra no cartão'),
                         ),
                       if (activeAccounts.length >= 2)
-                        OutlinedButton.icon(
+                        _CompactQuickActionButton(
+                          label: 'Transferir',
+                          icon: Icons.swap_horiz_rounded,
+                          outlined: true,
                           onPressed: () => showTransferFormDialog(context),
-                          icon: const Icon(Icons.swap_horiz_rounded),
-                          label: const Text('Transferir'),
                         ),
                     ],
                   ),
-                  const SizedBox(height: 14),
+                  const SizedBox(height: 10),
                 ],
                 Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
+                  spacing: 6,
+                  runSpacing: 6,
                   crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
                     for (final period in DatePeriodType.values)
-                      ChoiceChip(
-                        label: Text(period.label),
+                      _CompactPeriodChip(
+                        label: period.label,
                         selected: _activePeriod.type == period,
-                        onSelected: (_) => _selectPeriod(period, monthStartDay),
+                        onSelected: () => _selectPeriod(period, monthStartDay),
                       ),
                     Padding(
-                      padding: const EdgeInsets.only(left: 4),
+                      padding: const EdgeInsets.only(left: 2),
                       child: Text(
                         '${DateFormatter.shortDate(_activePeriod.start, locale: locale)} - '
                         '${DateFormatter.shortDate(_activePeriod.end, locale: locale)}',
                         style: theme.textTheme.bodySmall?.copyWith(
+                          fontSize: 11.5,
                           color: theme.colorScheme.onSurfaceVariant,
                         ),
                       ),
                     ),
                   ],
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 14),
                 LayoutBuilder(
                   builder: (context, constraints) {
                     final columns = constraints.maxWidth >= 900
@@ -864,72 +871,80 @@ class _DashboardBudgetsCard extends StatelessWidget {
   }
 }
 
-class _EnvironmentBannerCard extends StatelessWidget {
-  const _EnvironmentBannerCard({
-    required this.bootstrap,
-    required this.statusColor,
+class _CompactQuickActionButton extends StatelessWidget {
+  const _CompactQuickActionButton({
+    required this.label,
+    required this.icon,
+    required this.onPressed,
+    this.iconColor,
+    this.outlined = false,
   });
 
-  final AppBootstrapState bootstrap;
-  final Color statusColor;
+  final String label;
+  final IconData icon;
+  final VoidCallback onPressed;
+  final Color? iconColor;
+  final bool outlined;
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Wrap(
-          spacing: 12,
-          runSpacing: 10,
-          crossAxisAlignment: WrapCrossAlignment.center,
-          alignment: WrapAlignment.spaceBetween,
-          children: [
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                StatusBadge(
-                  label: bootstrap.firebase.isReady
-                      ? 'Sincronizado'
-                      : 'Esqueleto Etapa 0',
-                  color: AppColors.primaryLight,
-                  icon: Icons.verified_outlined,
-                ),
-                StatusBadge(
-                  label: PlatformInfo.platformLabel,
-                  color: AppColors.transfer,
-                  icon: Icons.devices_outlined,
-                ),
-                StatusBadge(
-                  label: bootstrap.localStorageInitialized
-                      ? 'Cache Hive ativo'
-                      : 'Cache Hive em memória',
-                  color: AppColors.income,
-                  icon: Icons.storage_outlined,
-                ),
-              ],
-            ),
-            Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(Icons.cloud_outlined, size: 18, color: statusColor),
-                const SizedBox(width: 8),
-                Flexible(
-                  child: Text(
-                    bootstrap.firebase.errorDetails != null
-                        ? '${bootstrap.firebase.message} (${bootstrap.firebase.errorDetails})'
-                        : bootstrap.firebase.message,
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
+    const style = ButtonStyle(
+      visualDensity: VisualDensity(horizontal: -2, vertical: -3),
+      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      minimumSize: MaterialStatePropertyAll(Size(0, 32)),
+      padding: MaterialStatePropertyAll(
+        EdgeInsets.symmetric(horizontal: 10, vertical: 5),
       ),
+      textStyle: MaterialStatePropertyAll(
+        TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+      ),
+    );
+    final iconWidget = Icon(icon, size: 15, color: iconColor);
+    final labelWidget = Text(label, maxLines: 1, softWrap: false);
+
+    if (outlined) {
+      return OutlinedButton.icon(
+        style: style,
+        onPressed: onPressed,
+        icon: iconWidget,
+        label: labelWidget,
+      );
+    }
+
+    return FilledButton.tonalIcon(
+      style: style,
+      onPressed: onPressed,
+      icon: iconWidget,
+      label: labelWidget,
+    );
+  }
+}
+
+class _CompactPeriodChip extends StatelessWidget {
+  const _CompactPeriodChip({
+    required this.label,
+    required this.selected,
+    required this.onSelected,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    return ChoiceChip(
+      label: Text(label, maxLines: 1, softWrap: false),
+      selected: selected,
+      onSelected: (_) => onSelected(),
+      visualDensity: const VisualDensity(horizontal: -3, vertical: -3),
+      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+      labelPadding: const EdgeInsets.symmetric(horizontal: 4),
+      labelStyle: Theme.of(context).textTheme.labelSmall?.copyWith(
+            fontSize: 11.5,
+            fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+          ),
     );
   }
 }
@@ -1141,6 +1156,282 @@ class _ModulesDirectoryCard extends StatelessWidget {
               ],
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Card inicial exibindo o saldo individual de todas as contas ativas do usuário.
+class _AccountsBalancesCard extends StatelessWidget {
+  const _AccountsBalancesCard({
+    required this.accounts,
+    required this.archivedCount,
+    required this.totalBalanceCents,
+    required this.formatMoney,
+    required this.onManageAccounts,
+    required this.onAddAccount,
+    required this.onOpenAccount,
+  });
+
+  final List<AccountEntity> accounts;
+  final int archivedCount;
+  final int totalBalanceCents;
+  final String Function(int) formatMoney;
+  final VoidCallback onManageAccounts;
+  final VoidCallback onAddAccount;
+  final ValueChanged<AccountEntity> onOpenAccount;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final tileColor = isDark
+        ? AppColors.darkSurfaceElevated.withOpacity(0.55)
+        : AppColors.lightSurfaceMuted.withOpacity(0.8);
+    final tileBorderColor =
+        isDark ? AppColors.darkBorder : AppColors.lightBorder;
+    final totalColor =
+        totalBalanceCents >= 0 ? AppColors.primaryLight : AppColors.expense;
+
+    final subtitleText = accounts.isEmpty
+        ? (archivedCount > 0
+            ? '$archivedCount conta(s) arquivada(s)'
+            : 'Nenhuma conta ativa cadastrada')
+        : '${accounts.length} conta(s) ativa(s)'
+            '${archivedCount > 0 ? ' • +$archivedCount arquivada(s)' : ''}';
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                Container(
+                  width: 30,
+                  height: 30,
+                  decoration: BoxDecoration(
+                    color: AppColors.primaryLight.withOpacity(0.14),
+                    borderRadius: BorderRadius.circular(9),
+                  ),
+                  child: const Icon(
+                    Icons.account_balance_wallet_rounded,
+                    size: 17,
+                    color: AppColors.primaryLight,
+                  ),
+                ),
+                const SizedBox(width: 9),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Saldo das contas',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.titleSmall?.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      Text(
+                        subtitleText,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          fontSize: 11.5,
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                InkWell(
+                  onTap: onManageAccounts,
+                  borderRadius: BorderRadius.circular(8),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 6,
+                      vertical: 4,
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          formatMoney(totalBalanceCents),
+                          style: theme.textTheme.titleSmall?.copyWith(
+                            fontWeight: FontWeight.w800,
+                            color: totalColor,
+                          ),
+                        ),
+                        const SizedBox(width: 2),
+                        Icon(
+                          Icons.chevron_right_rounded,
+                          size: 18,
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            if (accounts.isEmpty)
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      archivedCount > 0
+                          ? 'Todas as contas estão arquivadas no momento.'
+                          : 'Cadastre uma conta para acompanhar seu saldo aqui.',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ),
+                  TextButton(
+                    onPressed:
+                        archivedCount > 0 ? onManageAccounts : onAddAccount,
+                    child: Text(
+                      archivedCount > 0 ? 'Gerenciar' : 'Nova conta',
+                    ),
+                  ),
+                ],
+              )
+            else
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  final columns = constraints.maxWidth >= 860
+                      ? 3
+                      : constraints.maxWidth >= 520
+                          ? 2
+                          : 1;
+                  final tileWidth =
+                      (constraints.maxWidth - (8 * (columns - 1))) / columns;
+
+                  return Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      for (final account in accounts)
+                        SizedBox(
+                          width: tileWidth,
+                          child: _AccountBalanceMiniTile(
+                            account: account,
+                            balanceText: formatMoney(
+                              account.currentBalanceCents,
+                            ),
+                            backgroundColor: tileColor,
+                            borderColor: tileBorderColor,
+                            onTap: () => onOpenAccount(account),
+                          ),
+                        ),
+                    ],
+                  );
+                },
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _AccountBalanceMiniTile extends StatelessWidget {
+  const _AccountBalanceMiniTile({
+    required this.account,
+    required this.balanceText,
+    required this.backgroundColor,
+    required this.borderColor,
+    required this.onTap,
+  });
+
+  final AccountEntity account;
+  final String balanceText;
+  final Color backgroundColor;
+  final Color borderColor;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final accent = ColorUtils.fromHex(account.colorHex);
+    final iconData = IconCatalog.resolve(
+      account.iconName,
+      fallback: Icons.account_balance_rounded,
+    );
+    final balanceColor = account.currentBalanceCents >= 0
+        ? AppColors.income
+        : AppColors.expense;
+    final subLabel = account.institution.isNotEmpty
+        ? account.institution
+        : account.type.label;
+
+    return Material(
+      color: backgroundColor,
+      borderRadius: BorderRadius.circular(12),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: borderColor),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 28,
+                height: 28,
+                decoration: BoxDecoration(
+                  color: accent.withOpacity(0.15),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(iconData, size: 16, color: accent),
+              ),
+              const SizedBox(width: 9),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      account.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    Text(
+                      subLabel,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        fontSize: 11,
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                balanceText,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w800,
+                  color: balanceColor,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

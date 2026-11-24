@@ -18,6 +18,26 @@ void main() {
 
     expect(state.status, FirebaseConnectionStatus.awaitingConfiguration);
     expect(state.isReady, isFalse);
+    expect(state.appCheckActive, isFalse);
+    expect(state.appCheckStatusLabel, 'App Check aguardando configuração');
+  });
+
+  test('AppCheckActivationResult exposes deterministic state properties', () {
+    const result = AppCheckActivationResult(
+      active: true,
+      label: 'App Check ativo (Play Integrity)',
+    );
+    const state = FirebaseBootstrapState(
+      status: FirebaseConnectionStatus.connected,
+      message: 'Firebase conectado (Android).',
+      projectId: 'finance-control-luizmgms',
+      appCheckActive: true,
+      appCheckStatusLabel: 'App Check ativo (Play Integrity)',
+    );
+
+    expect(result.active, isTrue);
+    expect(state.appCheckActive, isTrue);
+    expect(state.appCheckStatusLabel, 'App Check ativo (Play Integrity)');
   });
 
   test('DefaultFirebaseOptions has real project configuration', () {

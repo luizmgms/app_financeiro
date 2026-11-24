@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/routes/app_routes.dart';
+import '../../../../core/services/firebase_bootstrap_service.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/platform_info.dart';
 import '../../../../core/widgets/status_badge.dart';
@@ -26,6 +27,12 @@ class SettingsPage extends ConsumerWidget {
     final authUser = ref.watch(currentAuthUserProvider);
     final userProfile = ref.watch(userProfileProvider).valueOrNull;
     final theme = Theme.of(context);
+    final firebaseColor = switch (bootstrap.firebase.status) {
+      FirebaseConnectionStatus.connected => AppColors.income,
+      FirebaseConnectionStatus.awaitingConfiguration => AppColors.warning,
+      FirebaseConnectionStatus.unsupportedPlatform => AppColors.transfer,
+      FirebaseConnectionStatus.error => AppColors.expense,
+    };
 
     return Scaffold(
       appBar: AppBar(title: const Text('Configurações')),
@@ -298,27 +305,49 @@ class SettingsPage extends ConsumerWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'Diagnóstico do Ambiente',
+                          'Conexões Ativas e Diagnóstico',
                           style: theme.textTheme.titleMedium?.copyWith(
                             fontWeight: FontWeight.w700,
                           ),
                         ),
-                        const SizedBox(height: 10),
+                        const SizedBox(height: 12),
                         Wrap(
                           spacing: 8,
                           runSpacing: 8,
                           children: [
                             StatusBadge(
+                              label: bootstrap.firebase.isReady
+                                  ? 'Sincronizado'
+                                  : 'Esqueleto Etapa 0',
+                              color: AppColors.primaryLight,
+                              icon: Icons.verified_outlined,
+                            ),
+                            StatusBadge(
                               label: PlatformInfo.platformLabel,
                               color: AppColors.transfer,
+                              icon: Icons.devices_outlined,
+                            ),
+                            StatusBadge(
+                              label: bootstrap.localStorageInitialized
+                                  ? 'Cache Hive ativo'
+                                  : 'Cache Hive em memória',
+                              color: AppColors.income,
+                              icon: Icons.storage_outlined,
                             ),
                             StatusBadge(
                               label: bootstrap.firebase.isReady
-                                  ? 'Firebase conectado'
+                                  ? (bootstrap.firebase.usingEmulator
+                                      ? 'Firebase Emulator'
+                                      : 'Firebase conectado')
                                   : 'Firebase aguardando configuração',
-                              color: bootstrap.firebase.isReady
+                              color: firebaseColor,
+                            ),
+                            StatusBadge(
+                              label: bootstrap.firebase.appCheckStatusLabel,
+                              color: bootstrap.firebase.appCheckActive
                                   ? AppColors.income
                                   : AppColors.warning,
+                              icon: Icons.verified_user_outlined,
                             ),
                             StatusBadge(
                               label: PlatformInfo.supportsNativeFcm
@@ -330,8 +359,30 @@ class SettingsPage extends ConsumerWidget {
                             ),
                           ],
                         ),
+                        const SizedBox(height: 12),
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Icon(
+                              Icons.cloud_outlined,
+                              size: 18,
+                              color: firebaseColor,
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                bootstrap.firebase.projectId != null
+                                    ? '${bootstrap.firebase.message} Projeto: ${bootstrap.firebase.projectId}.'
+                                    : bootstrap.firebase.message,
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  color: theme.colorScheme.onSurfaceVariant,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
                         if (bootstrap.firebase.errorDetails != null) ...[
-                          const SizedBox(height: 10),
+                          const SizedBox(height: 8),
                           Text(
                             bootstrap.firebase.errorDetails!,
                             style: theme.textTheme.bodySmall?.copyWith(

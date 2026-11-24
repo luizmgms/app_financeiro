@@ -45,6 +45,14 @@
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>O Finance Control utiliza o microfone para ditar lançamentos financeiros ao Assistente IA.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>O Finance Control utiliza reconhecimento de voz para transcrever comandos em português para o Assistente IA.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>O Finance Control utiliza a câmera para fotografar comprovantes e notas fiscais.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>O Finance Control acessa sua galeria para anexar comprovantes de despesas e receitas.</string>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>

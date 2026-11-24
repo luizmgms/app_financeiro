@@ -195,33 +195,39 @@ class _AccountStatementPageState extends ConsumerState<AccountStatementPage> {
                               ),
                             ),
                             const SizedBox(width: 12),
-                            Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  account.institution.isNotEmpty
-                                      ? '${account.type.label} • ${account.institution}'
-                                      : account.type.label,
-                                  style: theme.textTheme.bodySmall?.copyWith(
-                                    color: theme.colorScheme.onSurfaceVariant,
+                            Flexible(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    account.institution.isNotEmpty
+                                        ? '${account.type.label} • ${account.institution}'
+                                        : account.type.label,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: theme.textTheme.bodySmall?.copyWith(
+                                      color: theme.colorScheme.onSurfaceVariant,
+                                    ),
                                   ),
-                                ),
-                                const SizedBox(height: 2),
-                                Text(
-                                  CurrencyFormatter.formatCents(
-                                    account.currentBalanceCents,
-                                    locale: locale,
-                                    currencyCode: currency,
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    CurrencyFormatter.formatCents(
+                                      account.currentBalanceCents,
+                                      locale: locale,
+                                      currencyCode: currency,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style:
+                                        theme.textTheme.headlineSmall?.copyWith(
+                                      fontWeight: FontWeight.w800,
+                                      color: account.currentBalanceCents >= 0
+                                          ? AppColors.income
+                                          : AppColors.expense,
+                                    ),
                                   ),
-                                  style:
-                                      theme.textTheme.headlineSmall?.copyWith(
-                                    fontWeight: FontWeight.w800,
-                                    color: account.currentBalanceCents >= 0
-                                        ? AppColors.income
-                                        : AppColors.expense,
-                                  ),
-                                ),
-                              ],
+                                ],
+                              ),
                             ),
                           ],
                         ),

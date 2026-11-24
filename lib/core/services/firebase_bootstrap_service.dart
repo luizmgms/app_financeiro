@@ -1,9 +1,10 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:equatable/equatable.dart';
+import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_storage/firebase_storage.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show kDebugMode, kIsWeb;
 import '../../firebase_options.dart';
 import '../utils/platform_info.dart';
 
@@ -14,6 +15,20 @@ enum FirebaseConnectionStatus {
   error,
 }
 
+/// Resultado da tentativa de ativação do Firebase App Check na plataforma atual.
+class AppCheckActivationResult extends Equatable {
+  const AppCheckActivationResult({
+    required this.active,
+    required this.label,
+  });
+
+  final bool active;
+  final String label;
+
+  @override
+  List<Object?> get props => [active, label];
+}
+
 /// Estado atual da inicialização do Firebase no dispositivo.
 class FirebaseBootstrapState extends Equatable {
   const FirebaseBootstrapState({
@@ -21,6 +36,8 @@ class FirebaseBootstrapState extends Equatable {
     required this.message,
     this.projectId,
     this.usingEmulator = false,
+    this.appCheckActive = false,
+    this.appCheckStatusLabel = 'App Check inativo',
     this.errorDetails,
   });
 
@@ -30,34 +47,52 @@ class FirebaseBootstrapState extends Equatable {
             'Modo Esqueleto: execute "flutterfire configure" para conectar ao Firebase.',
         projectId = null,
         usingEmulator = false,
+        appCheckActive = false,
+        appCheckStatusLabel = 'App Check aguardando configuração',
         errorDetails = null;
 
   final FirebaseConnectionStatus status;
   final String message;
   final String? projectId;
   final bool usingEmulator;
+  final bool appCheckActive;
+  final String appCheckStatusLabel;
   final String? errorDetails;
 
   bool get isReady => status == FirebaseConnectionStatus.connected;
 
   @override
-  List<Object?> get props =>
-      [status, message, projectId, usingEmulator, errorDetails];
+  List<Object?> get props => [
+        status,
+        message,
+        projectId,
+        usingEmulator,
+        appCheckActive,
+        appCheckStatusLabel,
+        errorDetails,
+      ];
 }
 
-/// Inicializa o Firebase com segurança por plataforma, cache offline no Firestore
-/// e suporte opcional ao Firebase Emulator Suite via `--dart-define`.
+/// Inicializa o Firebase com segurança por plataforma, cache offline no Firestore,
+/// ativação resiliente do App Check e suporte opcional ao Firebase Emulator Suite.
 class FirebaseBootstrapService {
   FirebaseBootstrapService({
     FirebaseOptions Function()? optionsResolver,
-  }) : _optionsResolver = optionsResolver;
+    Future<AppCheckActivationResult> Function()? appCheckActivator,
+  })  : _optionsResolver = optionsResolver,
+        _appCheckActivator = appCheckActivator;
 
   static const bool _useEmulator =
       bool.fromEnvironment('USE_FIREBASE_EMULATOR', defaultValue: false);
   static const String _customEmulatorHost =
       String.fromEnvironment('FIREBASE_EMULATOR_HOST', defaultValue: '');
+  static const bool _enableAppCheck =
+      bool.fromEnvironment('ENABLE_APP_CHECK', defaultValue: true);
+  static const String _webRecaptchaKey =
+      String.fromEnvironment('APP_CHECK_WEB_RECAPTCHA_KEY', defaultValue: '');
 
   final FirebaseOptions Function()? _optionsResolver;
+  final Future<AppCheckActivationResult> Function()? _appCheckActivator;
 
   Future<FirebaseBootstrapState> initialize() async {
     if (!PlatformInfo.supportsCoreFirebase) {
@@ -65,6 +100,7 @@ class FirebaseBootstrapService {
         status: FirebaseConnectionStatus.unsupportedPlatform,
         message:
             '${PlatformInfo.platformLabel} não possui SDK nativo FlutterFire nesta versão.',
+        appCheckStatusLabel: 'App Check isolado nesta plataforma',
       );
     }
 
@@ -86,6 +122,7 @@ class FirebaseBootstrapService {
       }
 
       await _configureFirestorePersistence();
+      final appCheckResult = await _activateAppCheck();
 
       return FirebaseBootstrapState(
         status: FirebaseConnectionStatus.connected,
@@ -94,12 +131,89 @@ class FirebaseBootstrapService {
             : 'Firebase conectado (${PlatformInfo.platformLabel}).',
         projectId: app.options.projectId,
         usingEmulator: _useEmulator,
+        appCheckActive: appCheckResult.active,
+        appCheckStatusLabel: appCheckResult.label,
       );
     } catch (error) {
       return FirebaseBootstrapState(
         status: FirebaseConnectionStatus.error,
         message: 'Falha ao inicializar Firebase. Executando em modo local.',
+        appCheckStatusLabel: 'App Check inativo (modo local)',
         errorDetails: error.toString(),
+      );
+    }
+  }
+
+  Future<AppCheckActivationResult> _activateAppCheck() async {
+    if (_appCheckActivator != null) {
+      return _appCheckActivator!();
+    }
+    if (!_enableAppCheck) {
+      return const AppCheckActivationResult(
+        active: false,
+        label: 'App Check desabilitado no build',
+      );
+    }
+    if (_useEmulator) {
+      return const AppCheckActivationResult(
+        active: false,
+        label: 'App Check em bypass (Emulator Suite)',
+      );
+    }
+    if (!PlatformInfo.supportsNativeAppCheck) {
+      return const AppCheckActivationResult(
+        active: false,
+        label: 'App Check isolado nesta plataforma',
+      );
+    }
+
+    try {
+      if (PlatformInfo.isWeb) {
+        if (_webRecaptchaKey.isEmpty) {
+          return const AppCheckActivationResult(
+            active: false,
+            label: 'App Check Web aguardando RECAPTCHA_KEY',
+          );
+        }
+        await FirebaseAppCheck.instance
+            .activate(webProvider: ReCaptchaV3Provider(_webRecaptchaKey))
+            .timeout(const Duration(seconds: 5));
+        return const AppCheckActivationResult(
+          active: true,
+          label: 'App Check ativo (reCAPTCHA v3)',
+        );
+      }
+
+      if (PlatformInfo.isAndroid) {
+        const provider =
+            kDebugMode ? AndroidProvider.debug : AndroidProvider.playIntegrity;
+        await FirebaseAppCheck.instance
+            .activate(androidProvider: provider)
+            .timeout(const Duration(seconds: 5));
+        return const AppCheckActivationResult(
+          active: true,
+          label: kDebugMode
+              ? 'App Check ativo (Debug)'
+              : 'App Check ativo (Play Integrity)',
+        );
+      }
+
+      const appleProvider = kDebugMode
+          ? AppleProvider.debug
+          : AppleProvider.appAttestWithDeviceCheckFallback;
+      await FirebaseAppCheck.instance
+          .activate(appleProvider: appleProvider)
+          .timeout(const Duration(seconds: 5));
+      return const AppCheckActivationResult(
+        active: true,
+        label: kDebugMode
+            ? 'App Check ativo (Debug)'
+            : 'App Check ativo (App Attest)',
+      );
+    } catch (_) {
+      return const AppCheckActivationResult(
+        active: false,
+        label: 'App Check aguardando validação no dispositivo',
       );
     }
   }

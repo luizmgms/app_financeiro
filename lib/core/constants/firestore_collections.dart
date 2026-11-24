@@ -13,6 +13,7 @@ abstract final class FirestoreCollections {
   static const String notifications = 'notifications';
   static const String notificationDevices = 'notification_devices';
   static const String aiInteractions = 'ai_interactions';
+  static const String aiUsage = 'ai_usage';
 
   /// Retorna o caminho base da subcoleção isolada do usuário autenticado.
   static String userSubcollection(String userId, String collectionName) {

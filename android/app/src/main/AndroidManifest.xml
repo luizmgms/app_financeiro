@@ -9,8 +9,9 @@
     </queries>
 
     <application
-        android:label="finance_control"
+        android:label="Finance Control"
         android:name="${applicationName}"
+        android:allowBackup="false"
         android:icon="@mipmap/ic_launcher">
         <activity
             android:name=".MainActivity"

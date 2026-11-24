@@ -39,7 +39,8 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Finance Control'), findsWidgets);
-    expect(find.text('Esqueleto Etapa 0'), findsOneWidget);
+    expect(find.text('Esqueleto Etapa 0'), findsNothing);
+    expect(find.text('Cache Hive ativo'), findsNothing);
     expect(find.byType(NavigationRail), findsOneWidget);
     expect(find.byTooltip('Assistente Financeiro IA'), findsOneWidget);
 
@@ -54,7 +55,7 @@ void main() {
     expect(find.text('Saldo total em contas ativas'), findsOneWidget);
     expect(find.text('Nenhuma conta cadastrada'), findsOneWidget);
 
-    // Navega para Configurações e altera o tema.
+    // Navega para Configurações (Ajustes), verifica o card de conexões e altera o tema.
     await tester.tap(
       find.descendant(
         of: find.byType(NavigationRail),
@@ -63,7 +64,12 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(find.text('Aparência (Material Design 3)'), findsOneWidget);
+    await tester.ensureVisible(find.text('Conexões Ativas e Diagnóstico'));
+    await tester.pumpAndSettle();
+    expect(find.text('Esqueleto Etapa 0'), findsOneWidget);
+    expect(find.text('Cache Hive em memória'), findsOneWidget);
 
+    await tester.ensureVisible(find.text('Escuro'));
     await tester.tap(find.text('Escuro'));
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
@@ -81,6 +87,17 @@ void main() {
     expect(find.byType(NavigationBar), findsOneWidget);
     expect(find.byType(FloatingActionButton), findsOneWidget);
     expect(find.byTooltip('Assistente Financeiro IA'), findsOneWidget);
+    expect(find.text('Esqueleto Etapa 0'), findsNothing);
+
+    await tester.tap(
+      find.descendant(
+        of: find.byType(NavigationBar),
+        matching: find.text('Ajustes'),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('Conexões Ativas e Diagnóstico'));
+    await tester.pumpAndSettle();
     expect(find.text('Esqueleto Etapa 0'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });

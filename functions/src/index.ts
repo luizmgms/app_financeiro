@@ -7,6 +7,7 @@ import {
   getAccountingMonthWindow,
   resolveAccountingYearMonth,
 } from "./accounting_utils";
+import { purgeUserAccountData } from "./account_cleanup";
 import { handleAiAssistantRequest } from "./ai_assistant";
 import {
   AlertCandidate,
@@ -33,6 +34,7 @@ if (admin.apps.length === 0) {
 
 const db = admin.firestore();
 const REGION = "us-central1";
+const ENFORCE_APP_CHECK = process.env.ENFORCE_APP_CHECK === "true";
 
 interface SyncStats {
   generatedOccurrences: number;
@@ -536,7 +538,11 @@ export const scheduledFinanceAutomation = onSchedule(
  * Gatilho autenticado sob demanda para sincronizar recorrências e alertas do usuário.
  */
 export const syncAutomationOnDemand = onCall(
-  { region: REGION },
+  {
+    region: REGION,
+    cors: true,
+    enforceAppCheck: ENFORCE_APP_CHECK,
+  },
   async (request) => {
     if (!request.auth?.uid) {
       throw new HttpsError("unauthenticated", "Usuário não autenticado.");
@@ -554,6 +560,7 @@ export const aiAssistantQuery = onCall(
   {
     region: REGION,
     cors: true,
+    enforceAppCheck: ENFORCE_APP_CHECK,
     timeoutSeconds: 60,
     memory: "512MiB",
     maxInstances: 20,
@@ -570,6 +577,38 @@ export const aiAssistantQuery = onCall(
       db,
       uid: request.auth.uid,
       requestData: data,
+    });
+  },
+);
+
+/**
+ * Remove recursivamente todos os documentos de `users/{uid}` (incluindo `ai_usage`
+ * e `ai_interactions`) e arquivos do usuário no Firebase Storage (`users/{uid}/`).
+ */
+export const deleteUserAccountData = onCall(
+  {
+    region: REGION,
+    cors: true,
+    enforceAppCheck: ENFORCE_APP_CHECK,
+    timeoutSeconds: 60,
+  },
+  async (request) => {
+    const uid = request.auth?.uid;
+    if (!uid) {
+      throw new HttpsError("unauthenticated", "Usuário não autenticado.");
+    }
+
+    return purgeUserAccountData({
+      uid,
+      recursiveDeleteUserDoc: async (targetUid) => {
+        await db.recursiveDelete(db.collection("users").doc(targetUid));
+      },
+      deleteUserStoragePrefix: async (prefix) => {
+        await admin.storage().bucket().deleteFiles({ prefix });
+      },
+      onStorageWarning: (msg, err) => {
+        logger.warn(msg, err);
+      },
     });
   },
 );

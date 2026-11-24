@@ -1,13 +1,36 @@
 rules_version = '2';
 
+// ===============================================================
+// Storage Security Rules — Finance Control (Auditoria Etapa 7)
+// ===============================================================
+//
+// - Isolamento estrito por usuario autenticado (request.auth.uid == userId).
+// - Uploads restritos ao escopo de comprovantes de transacoes:
+//     /users/{userId}/transactions/{transactionId}/{fileName}
+// - Validacao obrigatoria de MIME type (JPG, PNG, WEBP, PDF) e limite < 10 MB,
+//   impedindo stored XSS via HTML/SVG ou payloads executaveis.
+// ===============================================================
+
 service firebase.storage {
   match /b/{bucket}/o {
-    match /users/{userId}/{allPaths=**} {
-      allow read, delete: if request.auth != null && request.auth.uid == userId;
+    match /users/{userId}/transactions/{transactionId}/{fileName} {
       allow create, update: if request.auth != null
           && request.auth.uid == userId
+          && transactionId.size() > 0
+          && transactionId.size() <= 128
+          && !transactionId.matches('.*[.][.].*')
+          && fileName.size() > 0
+          && fileName.size() <= 255
+          && !fileName.matches('.*[.][.].*')
           && request.resource != null
-          && request.resource.size < 10 * 1024 * 1024;
+          && request.resource.size > 0
+          && request.resource.size < 10 * 1024 * 1024
+          && request.resource.contentType != null
+          && request.resource.contentType.matches('image/(jpeg|png|webp)|application/pdf');
+    }
+
+    match /users/{userId}/{allPaths=**} {
+      allow read, delete: if request.auth != null && request.auth.uid == userId;
     }
 
     match /{allPaths=**} {

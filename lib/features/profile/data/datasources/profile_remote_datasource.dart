@@ -1,19 +1,26 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
+import 'package:firebase_core/firebase_core.dart';
 import '../../../../core/constants/app_constants.dart';
 import '../../../../core/constants/firestore_collections.dart';
 import '../../../../core/utils/firestore_utils.dart';
+import '../../../../core/utils/platform_info.dart';
 import '../../../authentication/domain/entities/auth_user.dart';
 import '../../domain/entities/user_profile.dart';
 import '../models/user_profile_model.dart';
 
 /// Acesso remoto ao documento de perfil e exclusão de subcoleções do usuário.
 class ProfileRemoteDatasource {
-  ProfileRemoteDatasource({FirebaseFirestore? firestore})
-      : _firestore = firestore;
+  ProfileRemoteDatasource({
+    FirebaseFirestore? firestore,
+    Future<void> Function(String uid)? serverAccountCleaner,
+  })  : _firestore = firestore,
+        _serverAccountCleaner = serverAccountCleaner;
 
   static const String mainProfileDocId = 'main';
 
   final FirebaseFirestore? _firestore;
+  final Future<void> Function(String uid)? _serverAccountCleaner;
 
   FirebaseFirestore get _db => _firestore ?? FirebaseFirestore.instance;
 
@@ -78,9 +85,24 @@ class ProfileRemoteDatasource {
     );
   }
 
-  /// Remove os documentos das subcoleções do usuário e o documento raiz
-  /// `users/{uid}` em lotes antes da exclusão no Firebase Authentication.
+  /// Remove recursivamente os dados do usuário (via Cloud Function `deleteUserAccountData`
+  /// para incluir `ai_usage` e anexos no Storage) e executa limpeza em lote no Firestore
+  /// como fallback seguro antes da exclusão no Firebase Authentication.
   Future<void> deleteUserData(String uid) async {
+    try {
+      if (_serverAccountCleaner != null) {
+        await _serverAccountCleaner!(uid);
+        return;
+      }
+      if (PlatformInfo.supportsNativeCloudFunctions && Firebase.apps.isNotEmpty) {
+        await FirebaseFunctions.instanceFor(region: 'us-central1')
+            .httpsCallable('deleteUserAccountData')
+            .call<dynamic>();
+      }
+    } catch (_) {
+      // Fallback silencioso para exclusão direta das subcoleções permitidas nas regras.
+    }
+
     const subcollections = [
       FirestoreCollections.profile,
       FirestoreCollections.accounts,
