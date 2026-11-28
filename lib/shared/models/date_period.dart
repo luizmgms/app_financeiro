@@ -86,8 +86,15 @@ class DatePeriod extends Equatable {
       DatePeriodType.thisWeek => () {
           final startOfWeek =
               todayStart.subtract(Duration(days: todayStart.weekday - 1));
-          final endOfWeek = startOfWeek.add(
-            const Duration(days: 6, hours: 23, minutes: 59, seconds: 59),
+          final endDay = startOfWeek.add(const Duration(days: 6));
+          final endOfWeek = DateTime(
+            endDay.year,
+            endDay.month,
+            endDay.day,
+            23,
+            59,
+            59,
+            999,
           );
           return DatePeriod(type: type, start: startOfWeek, end: endOfWeek);
         }(),

@@ -308,14 +308,15 @@ class _CreditCardsPageState extends ConsumerState<CreditCardsPage> {
           }
 
           final invoicePurchases = selectedInvoice != null
-              ? allTransactions
+              ? (allTransactions
                   .where(
                     (tx) =>
                         (tx.kind == TransactionKind.cardPurchase ||
                             tx.kind == TransactionKind.cardRefund) &&
                         tx.invoiceId == selectedInvoice!.id,
                   )
-                  .toList(growable: false)
+                  .toList()
+                ..sort(TransactionEntity.compareByRecencyDesc))
               : const <TransactionEntity>[];
 
           return Center(
@@ -1196,8 +1197,9 @@ class _InvoicesSection extends StatelessWidget {
                                           children: [
                                             Text(
                                               [
-                                                DateFormatter.shortDate(
+                                                DateFormatter.shortDateTime(
                                                   tx.competencyDate,
+                                                  locale: locale,
                                                 ),
                                                 categoriesById[tx.categoryId]
                                                         ?.name ??
@@ -1219,6 +1221,13 @@ class _InvoicesSection extends StatelessWidget {
                                                 label:
                                                     '${tx.installmentNumber}/${tx.totalInstallments}',
                                                 color: AppColors.primaryLight,
+                                              ),
+                                            if (tx.recurringId != null &&
+                                                tx.recurringId!.isNotEmpty)
+                                              const StatusBadge(
+                                                label: 'Recorrente',
+                                                color: AppColors.transfer,
+                                                icon: Icons.repeat_rounded,
                                               ),
                                           ],
                                         ),

@@ -210,7 +210,7 @@ class TransactionListTile extends StatelessWidget {
     final subtitleParts = <String>[
       if (!isTransfer && category != null) category!.name,
       accountLabel,
-      DateFormatter.shortDate(transaction.competencyDate, locale: locale),
+      DateFormatter.shortDateTime(transaction.competencyDate, locale: locale),
       if (transaction.dueDate != null && !effStatus.isSettled)
         'Venc. ${DateFormatter.shortDate(transaction.dueDate!, locale: locale)}',
     ];

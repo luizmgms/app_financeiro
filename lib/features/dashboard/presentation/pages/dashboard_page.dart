@@ -13,6 +13,7 @@ import '../../../../core/utils/icon_catalog.dart';
 import '../../../../core/widgets/status_badge.dart';
 import '../../../../shared/models/date_period.dart';
 import '../../../../shared/providers/app_bootstrap_provider.dart';
+import '../../../../shared/widgets/app_brand_logo.dart';
 import '../../../../shared/widgets/summary_metric_card.dart';
 import '../../../accounts/application/providers/account_providers.dart';
 import '../../../accounts/domain/entities/account_entity.dart';
@@ -163,19 +164,35 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
           currencyCode: currency,
         );
 
-    final recentTransactions = allTransactions.take(5).toList(growable: false);
+    final sortedTransactions = List<TransactionEntity>.of(allTransactions)
+      ..sort(TransactionEntity.compareByRecencyDesc);
+    final recentTransactions =
+        sortedTransactions.take(5).toList(growable: false);
 
     return Scaffold(
       appBar: AppBar(
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        title: Row(
           children: [
-            const Text('Finance Control'),
-            Text(
-              authUser != null
-                  ? 'Olá, ${profile?.displayName ?? authUser.displayName}'
-                  : 'Visão geral financeira',
-              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w400),
+            const AppBrandLogo(size: 32, borderRadius: 9),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('Finance Control'),
+                  Text(
+                    authUser != null
+                        ? 'Olá, ${profile?.displayName ?? authUser.displayName}'
+                        : 'Visão geral financeira',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w400,
+                    ),
+                  ),
+                ],
+              ),
             ),
           ],
         ),

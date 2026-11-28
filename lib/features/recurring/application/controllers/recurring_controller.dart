@@ -88,10 +88,11 @@ class RecurringController extends Notifier<RecurringActionState> {
         return false;
       }
 
-      final normalizedStart = DateFormatter.dateOnly(startDate);
+      final normalizedStart = startDate;
       final normalizedEnd =
           endDate != null ? DateFormatter.dateOnly(endDate) : null;
-      if (normalizedEnd != null && normalizedEnd.isBefore(normalizedStart)) {
+      if (normalizedEnd != null &&
+          normalizedEnd.isBefore(DateFormatter.dateOnly(normalizedStart))) {
         state = const RecurringActionState(
           errorMessage: 'A data final não pode ser anterior à data inicial.',
         );

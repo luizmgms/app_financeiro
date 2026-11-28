@@ -303,8 +303,10 @@ abstract final class FinancialAnalyticsService {
     );
 
     final periodFilter = TransactionFilter(period: period);
-    final periodTransactions =
-        allTransactions.where(periodFilter.matches).toList(growable: false);
+    final periodTransactions = allTransactions
+        .where(periodFilter.matches)
+        .toList()
+      ..sort(TransactionEntity.compareByRecencyDesc);
     final summary = TransactionPeriodSummary.fromTransactions(
       periodTransactions,
       now: now,

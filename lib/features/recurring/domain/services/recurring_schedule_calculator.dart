@@ -163,7 +163,7 @@ abstract final class RecurringScheduleCalculator {
           recurringId: rule.id,
           occurrenceKey: occKey,
           transactionDocId: 'rec_$occKey',
-          scheduledDate: candidate,
+          scheduledDate: DateFormatter.preserveTime(candidate, rule.startDate),
           dateKey: dKey,
         ),
       );

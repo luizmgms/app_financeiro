@@ -113,7 +113,9 @@ class TransactionSuggestionCard extends StatelessWidget {
           ),
           _InfoLine(
             label: 'Data',
-            value: DateFormatter.shortDate(suggestion.date),
+            value: (suggestion.date.hour != 0 || suggestion.date.minute != 0)
+                ? DateFormatter.shortDateTime(suggestion.date)
+                : DateFormatter.shortDate(suggestion.date),
           ),
           if ((suggestion.categorySuggestion ?? '').isNotEmpty)
             _InfoLine(

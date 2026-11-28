@@ -96,7 +96,7 @@ abstract final class ReportExportService {
     buf.writeln('Data;Tipo;Descricao;Valor;Status');
     for (final tx in snapshot.periodTransactions) {
       buf.writeln(
-        '${DateFormatter.shortDate(tx.competencyDate, locale: locale)};${esc(tx.kind.label)};${esc(tx.description)};${esc(fmt(tx.amountCents))};${esc(tx.effectiveStatus().label)}',
+        '${DateFormatter.shortDateTime(tx.competencyDate, locale: locale)};${esc(tx.kind.label)};${esc(tx.description)};${esc(fmt(tx.amountCents))};${esc(tx.effectiveStatus().label)}',
       );
     }
 
@@ -304,7 +304,7 @@ abstract final class ReportExportService {
               data: [
                 for (final tx in snapshot.periodTransactions.take(80))
                   [
-                    DateFormatter.shortDate(tx.competencyDate, locale: locale),
+                    DateFormatter.shortDateTime(tx.competencyDate, locale: locale),
                     _pdfSafe(tx.kind.label),
                     _pdfSafe(tx.description),
                     fmt(tx.amountCents),

@@ -52,11 +52,7 @@ class TransactionRemoteDatasource {
           .map(TransactionModel.fromFirestore)
           .toList(growable: false);
       final sorted = List<TransactionEntity>.of(list)
-        ..sort((a, b) {
-          final byDate = b.competencyDate.compareTo(a.competencyDate);
-          if (byDate != 0) return byDate;
-          return b.createdAt.compareTo(a.createdAt);
-        });
+        ..sort(TransactionEntity.compareByRecencyDesc);
       return sorted;
     });
   }

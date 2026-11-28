@@ -2,6 +2,7 @@ import 'package:equatable/equatable.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/errors/failures.dart';
 import '../../../../core/errors/firebase_error_mapper.dart';
+import '../../../../core/utils/date_formatter.dart';
 import '../../../accounts/application/controllers/account_controller.dart';
 import '../../../accounts/application/providers/account_providers.dart';
 import '../../../accounts/domain/entities/account_entity.dart';
@@ -561,6 +562,15 @@ class AiAssistantController extends Notifier<AiAssistantState> {
     required Map<String, String> createdCategoryCache,
   }) async {
     final type = item.transactionType;
+    final now = DateTime.now();
+    final isMidnightToday = item.date.hour == 0 &&
+        item.date.minute == 0 &&
+        item.date.second == 0 &&
+        item.date.year == now.year &&
+        item.date.month == now.month &&
+        item.date.day == now.day;
+    final effectiveDate =
+        isMidnightToday ? DateFormatter.preserveTime(item.date, now) : item.date;
 
     if (type == 'transfer') {
       final src = AiSuggestionValidator.matchAccount(
@@ -579,7 +589,7 @@ class AiAssistantController extends Notifier<AiAssistantState> {
             sourceAccountId: src.id,
             destinationAccountId: dst.id,
             amountCents: item.amountCents,
-            transferDate: item.date,
+            transferDate: effectiveDate,
             description: item.description,
             notes: _composeNotes(item),
           );
@@ -616,7 +626,7 @@ class AiAssistantController extends Notifier<AiAssistantState> {
       final ok = await ref.read(creditCardControllerProvider.notifier).payInvoice(
             invoiceId: matchingInvoices.first.id,
             paymentAccountId: acc.id,
-            paymentDate: item.date,
+            paymentDate: effectiveDate,
           );
       if (!ok) {
         state = state.copyWith(
@@ -653,7 +663,7 @@ class AiAssistantController extends Notifier<AiAssistantState> {
             categoryId: resolvedCategoryId,
             description: item.description,
             totalAmountCents: item.amountCents,
-            purchaseDate: item.date,
+            purchaseDate: effectiveDate,
             totalInstallments: item.installments,
             notes: _composeNotes(item),
           );
@@ -678,7 +688,7 @@ class AiAssistantController extends Notifier<AiAssistantState> {
             categoryId: resolvedCategoryId,
             description: item.description,
             amountCents: item.amountCents,
-            refundDate: item.date,
+            refundDate: effectiveDate,
             notes: _composeNotes(item),
           );
       if (!ok) {
@@ -712,7 +722,7 @@ class AiAssistantController extends Notifier<AiAssistantState> {
             accountId: card != null ? null : acc?.id,
             cardId: recKind == RecurringKind.expense ? card?.id : null,
             frequency: RecurringFrequency.fromStorage(item.frequency),
-            startDate: item.date,
+            startDate: effectiveDate,
             notes: _composeNotes(item),
           );
       if (!ok) {
@@ -744,9 +754,9 @@ class AiAssistantController extends Notifier<AiAssistantState> {
               amountCents: item.amountCents,
               categoryId: resolvedCategoryId,
               accountId: account.id,
-              competencyDate: item.date,
-              dueDate: item.date,
-              paymentDate: item.settled ? item.date : null,
+              competencyDate: effectiveDate,
+              dueDate: effectiveDate,
+              paymentDate: item.settled ? effectiveDate : null,
               status: txStatus,
               notes: _composeNotes(item),
             );
@@ -818,13 +828,23 @@ class AiAssistantController extends Notifier<AiAssistantState> {
     final suggestion = msg.suggestion;
     if (suggestion == null) return msg;
 
+    final now = DateTime.now();
+    final normalizedSuggestion = (suggestion.date.hour == 0 &&
+            suggestion.date.minute == 0 &&
+            suggestion.date.second == 0 &&
+            suggestion.date.year == now.year &&
+            suggestion.date.month == now.month &&
+            suggestion.date.day == now.day)
+        ? suggestion.copyWith(date: DateFormatter.preserveTime(suggestion.date, now))
+        : suggestion;
+
     final categories = ref.read(activeCategoriesProvider);
     final accounts = ref.read(activeAccountsProvider);
     final cards = ref.read(activeCreditCardsProvider);
     final txs = ref.read(transactionsStreamProvider).valueOrNull ?? const [];
 
     final enriched = AiSuggestionValidator.enrichWithLocalCatalog(
-      suggestion: suggestion,
+      suggestion: normalizedSuggestion,
       categories: categories,
       accounts: accounts,
       cards: cards,

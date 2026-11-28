@@ -28,6 +28,7 @@ import 'package:finance_control/features/credit_cards/domain/entities/credit_car
 import 'package:finance_control/features/credit_cards/domain/entities/invoice_entity.dart';
 import 'package:finance_control/features/credit_cards/domain/repositories/credit_card_repository.dart';
 import 'package:finance_control/features/credit_cards/domain/services/credit_card_cycle_calculator.dart';
+import 'package:finance_control/features/credit_cards/presentation/widgets/card_purchase_form_dialog.dart';
 import 'package:finance_control/features/dashboard/presentation/pages/dashboard_page.dart';
 import 'package:finance_control/features/installments/domain/entities/installment_plan_entity.dart';
 import 'package:finance_control/features/notifications/application/providers/notification_providers.dart';
@@ -53,6 +54,7 @@ import 'package:finance_control/features/transactions/domain/repositories/transa
 import 'package:finance_control/shared/models/date_period.dart';
 import 'package:finance_control/shared/models/money.dart';
 import 'package:finance_control/shared/providers/app_bootstrap_provider.dart';
+import 'package:finance_control/shared/widgets/app_brand_logo.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -1071,6 +1073,7 @@ void main() {
       await tester.pumpWidget(wrap(const DashboardPage()));
       await tester.pumpAndSettle();
 
+      expect(find.byType(AppBrandLogo), findsOneWidget);
       expect(find.text('Saldo das contas'), findsOneWidget);
       expect(find.text('Conta Corrente'), findsOneWidget);
       expect(find.text('Poupança'), findsOneWidget);
@@ -1110,6 +1113,7 @@ void main() {
       expect(tester.takeException(), isNull);
       await tester.pageBack();
       await tester.pumpAndSettle();
+      expect(find.byType(AppBrandLogo), findsOneWidget);
       expect(find.text('Saldo das contas'), findsOneWidget);
 
       // SettingsPage (Ajustes): recebe o card de Conexões Ativas + App Check sem overflow.
@@ -1123,6 +1127,36 @@ void main() {
       expect(find.text('Cache Hive ativo'), findsOneWidget);
       expect(find.text('Firebase conectado'), findsOneWidget);
       expect(find.text('App Check ativo (Play Integrity)'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+
+      // CardPurchaseFormDialog em 360x780: cria compra recorrente infinita (assinatura) no cartão.
+      await tester.pumpWidget(wrap(const CardPurchaseFormDialog()));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Recorrente'));
+      await tester.pumpAndSettle();
+      expect(find.text('Nova assinatura no cartão'), findsOneWidget);
+      expect(find.textContaining('Hora:'), findsOneWidget);
+
+      await tester.enterText(
+        find.widgetWithText(TextFormField, 'Nome da assinatura / recorrência'),
+        'Spotify Duo',
+      );
+      await tester.enterText(
+        find.widgetWithText(TextFormField, 'Valor por cobrança (R\$)'),
+        '27,90',
+      );
+      await tester.ensureVisible(find.text('Ativar assinatura'));
+      await tester.tap(find.text('Ativar assinatura'));
+      await tester.pumpAndSettle();
+
+      expect(store.rules.length, 1);
+      expect(store.rules.first.description, 'Spotify Duo');
+      expect(store.rules.first.amountCents, 2790);
+      expect(store.rules.first.cardId, 'card_1');
+      expect(store.rules.first.accountId, isNull);
+      expect(store.rules.first.frequency, RecurringFrequency.monthly);
+      expect(store.rules.first.endDate, isNull);
       expect(tester.takeException(), isNull);
     });
   });

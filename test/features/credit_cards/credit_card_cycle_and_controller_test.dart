@@ -616,6 +616,18 @@ void main() {
       expect(schedule[1].invoiceTarget!.referenceMonth, 12);
       expect(schedule[2].invoiceTarget!.referenceMonth, 1);
       expect(schedule[2].invoiceTarget!.referenceYear, 2027);
+
+      final timedSchedule =
+          CreditCardCycleCalculator.buildCardInstallmentSchedule(
+        cardId: 'card_1',
+        totalAmountCents: 6000,
+        installmentCount: 2,
+        purchaseDate: DateTime(2026, 11, 2, 19, 45),
+        closingDay: 10,
+        dueDay: 17,
+      );
+      expect(timedSchedule[0].competencyDate, DateTime(2026, 11, 2, 19, 45));
+      expect(timedSchedule[1].competencyDate, DateTime(2026, 12, 2, 19, 45));
     });
   });
 
@@ -1056,13 +1068,17 @@ void main() {
     expect(find.text('Nenhuma selecionada'), findsOneWidget);
     expect(tester.takeException(), isNull);
 
-    // 2. Formulário Compra / Estorno / Em conta com botões compactos sem quebra
+    // 2. Formulário Compra / Estorno / Em conta com tipo Parcelada vs Recorrente e seletor de Hora
     await tester.pumpWidget(buildMobileScope(const CardPurchaseFormDialog()));
     await tester.pumpAndSettle();
     expect(find.text('Nova compra no cartão'), findsOneWidget);
     expect(find.text('Compra'), findsOneWidget);
     expect(find.text('Estorno'), findsOneWidget);
     expect(find.text('Em conta'), findsOneWidget);
+    expect(find.text('Tipo de compra'), findsOneWidget);
+    expect(find.text('Parcelada'), findsOneWidget);
+    expect(find.text('Recorrente'), findsOneWidget);
+    expect(find.textContaining('Hora:'), findsOneWidget);
 
     final purchaseBtnSize = tester.getSize(find.text('Compra'));
     final refundBtnSize = tester.getSize(find.text('Estorno'));
@@ -1070,6 +1086,18 @@ void main() {
     expect(purchaseBtnSize.height, lessThan(26));
     expect(refundBtnSize.height, lessThan(26));
     expect(accountBtnSize.height, lessThan(26));
+    expect(tester.takeException(), isNull);
+
+    await tester.tap(find.text('Recorrente'));
+    await tester.pumpAndSettle();
+    expect(find.text('Nova assinatura no cartão'), findsOneWidget);
+    expect(find.text('Ativar assinatura'), findsOneWidget);
+    expect(find.text('Frequência'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+
+    await tester.tap(find.text('Parcelada'));
+    await tester.pumpAndSettle();
+    expect(find.text('Nova compra no cartão'), findsOneWidget);
     expect(tester.takeException(), isNull);
 
     await tester.tap(find.text('Estorno'));

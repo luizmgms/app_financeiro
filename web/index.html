@@ -1,28 +1,16 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <!--
-    If you are serving your web app in a path other than the root, change the
-    href value below to reflect the base path you are serving from.
-
-    The path provided below has to start and end with a slash "/" in order for
-    it to work correctly.
-
-    For more details:
-    * https://developer.mozilla.org/en-US/docs/Web/HTML/Element/base
-
-    This is a placeholder for base href that will be replaced by the value of
-    the `--base-href` argument provided to `flutter build`.
-  -->
   <base href="$FLUTTER_BASE_HREF">
 
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
   <meta name="description" content="Finance Control — Aplicativo de Gestão Financeira Pessoal.">
+  <meta name="theme-color" content="#0F766E">
 
   <!-- iOS meta tags & icons -->
   <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="Finance Control">
   <link rel="apple-touch-icon" href="icons/Icon-192.png">
 
@@ -32,6 +20,49 @@
   <title>Finance Control</title>
   <link rel="manifest" href="manifest.json">
 
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      background-color: #070E1E;
+    }
+
+    #splash-screen {
+      position: fixed;
+      inset: 0;
+      z-index: 9999;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 14px;
+      background: radial-gradient(circle at center, #0F3534 0%, #070E1E 68%);
+      transition: opacity 0.28s ease-out;
+    }
+
+    #splash-screen.fade-out {
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    #splash-logo {
+      width: 108px;
+      height: 108px;
+      border-radius: 26px;
+      box-shadow: 0 12px 36px rgba(20, 184, 166, 0.22);
+    }
+
+    #splash-title {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      font-size: 18px;
+      font-weight: 700;
+      letter-spacing: 0.3px;
+      color: #F8FAFC;
+    }
+  </style>
+
   <script>
     // The value below is injected by flutter build, do not touch.
     const serviceWorkerVersion = null;
@@ -40,7 +71,19 @@
   <script src="flutter.js" defer></script>
 </head>
 <body>
+  <div id="splash-screen" aria-hidden="true">
+    <img id="splash-logo" src="icons/Icon-192.png" alt="Finance Control" />
+    <div id="splash-title">Finance Control</div>
+  </div>
+
   <script>
+    function hideSplash() {
+      const splash = document.getElementById('splash-screen');
+      if (!splash) return;
+      splash.classList.add('fade-out');
+      setTimeout(() => splash.remove(), 320);
+    }
+
     window.addEventListener('load', function(ev) {
       // Download main.dart.js
       _flutter.loader.loadEntrypoint({
@@ -50,6 +93,7 @@
         onEntrypointLoaded: function(engineInitializer) {
           engineInitializer.initializeEngine().then(function(appRunner) {
             appRunner.runApp();
+            hideSplash();
           });
         }
       });

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/currency_formatter.dart';
 import '../../../../core/utils/date_formatter.dart';
+import '../../../../shared/widgets/date_time_picker_row.dart';
 import '../../../accounts/application/providers/account_providers.dart';
 import '../../../profile/application/providers/profile_providers.dart';
 import '../../application/controllers/credit_card_controller.dart';
@@ -47,18 +48,6 @@ class _PayInvoiceDialogState extends ConsumerState<PayInvoiceDialog> {
   void initState() {
     super.initState();
     _selectedAccountId = widget.card.paymentAccountId;
-  }
-
-  Future<void> _pickDate() async {
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: _paymentDate,
-      firstDate: DateTime(2000),
-      lastDate: DateTime(2100),
-    );
-    if (picked != null) {
-      setState(() => _paymentDate = picked);
-    }
   }
 
   Future<void> _submit() async {
@@ -196,12 +185,11 @@ class _PayInvoiceDialogState extends ConsumerState<PayInvoiceDialog> {
                       },
               ),
               const SizedBox(height: 12),
-              OutlinedButton.icon(
-                onPressed: isLoading ? null : _pickDate,
-                icon: const Icon(Icons.calendar_today_outlined, size: 18),
-                label: Text(
-                  'Data do pagamento: ${DateFormatter.shortDate(_paymentDate)}',
-                ),
+              DateTimePickerField(
+                label: 'Pagamento',
+                value: _paymentDate,
+                enabled: !isLoading,
+                onChanged: (date) => setState(() => _paymentDate = date),
               ),
               const SizedBox(height: 12),
               Text(

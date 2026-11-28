@@ -91,7 +91,9 @@ final transactionFilterProvider =
 final filteredTransactionsProvider = Provider<List<TransactionEntity>>((ref) {
   final all = ref.watch(transactionsStreamProvider).valueOrNull ?? const [];
   final filter = ref.watch(transactionFilterProvider);
-  return all.where(filter.matches).toList(growable: false);
+  final filtered = all.where(filter.matches).toList()
+    ..sort(TransactionEntity.compareByRecencyDesc);
+  return filtered;
 });
 
 final filteredTransactionsSummaryProvider =

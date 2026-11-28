@@ -6,6 +6,7 @@ import '../../../../core/services/attachment_storage_service.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/currency_formatter.dart';
 import '../../../../core/utils/date_formatter.dart';
+import '../../../../shared/widgets/date_time_picker_row.dart';
 import '../../../accounts/application/providers/account_providers.dart';
 import '../../../accounts/presentation/widgets/account_form_dialog.dart';
 import '../../../categories/application/providers/category_providers.dart';
@@ -446,24 +447,21 @@ class _TransactionFormDialogState extends ConsumerState<TransactionFormDialog> {
                         },
                 ),
                 const SizedBox(height: 12),
+                DateTimePickerField(
+                  label: _kind == TransactionKind.income
+                      ? 'Competência'
+                      : 'Lançamento',
+                  icon: Icons.event_note_outlined,
+                  value: _competencyDate,
+                  enabled: !isLoading,
+                  onChanged: (date) => setState(() => _competencyDate = date),
+                ),
+                const SizedBox(height: 10),
                 Wrap(
                   spacing: 8,
                   runSpacing: 8,
+                  crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
-                    OutlinedButton.icon(
-                      onPressed: isLoading
-                          ? null
-                          : () => _pickDate(
-                                initial: _competencyDate,
-                                onPicked: (date) =>
-                                    setState(() => _competencyDate = date),
-                              ),
-                      icon: const Icon(Icons.event_note_outlined, size: 18),
-                      label: Text(
-                        '${_kind == TransactionKind.income ? 'Competência' : 'Lançamento'}: '
-                        '${DateFormatter.shortDate(_competencyDate)}',
-                      ),
-                    ),
                     OutlinedButton.icon(
                       onPressed: isLoading
                           ? null
@@ -488,24 +486,20 @@ class _TransactionFormDialogState extends ConsumerState<TransactionFormDialog> {
                             : () => setState(() => _dueDate = null),
                         icon: const Icon(Icons.clear_rounded, size: 18),
                       ),
-                    if (_status.isSettled)
-                      OutlinedButton.icon(
-                        onPressed: isLoading
-                            ? null
-                            : () => _pickDate(
-                                  initial: _paymentDate ?? _competencyDate,
-                                  onPicked: (date) =>
-                                      setState(() => _paymentDate = date),
-                                ),
-                        icon: const Icon(Icons.event_available_outlined,
-                            size: 18),
-                        label: Text(
-                          '${_kind == TransactionKind.income ? 'Recebido em' : 'Pago em'}: '
-                          '${DateFormatter.shortDate(_paymentDate ?? _competencyDate)}',
-                        ),
-                      ),
                   ],
                 ),
+                if (_status.isSettled) ...[
+                  const SizedBox(height: 10),
+                  DateTimePickerField(
+                    label: _kind == TransactionKind.income
+                        ? 'Recebido em'
+                        : 'Pago em',
+                    icon: Icons.event_available_outlined,
+                    value: _paymentDate ?? _competencyDate,
+                    enabled: !isLoading,
+                    onChanged: (date) => setState(() => _paymentDate = date),
+                  ),
+                ],
                 const SizedBox(height: 12),
                 TextFormField(
                   controller: _notesController,

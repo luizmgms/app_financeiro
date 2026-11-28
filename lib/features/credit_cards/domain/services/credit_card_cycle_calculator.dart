@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 import 'package:equatable/equatable.dart';
+import '../../../../core/utils/date_formatter.dart';
 import '../../../../shared/models/money.dart';
 import '../entities/invoice_entity.dart';
 
@@ -147,13 +148,8 @@ abstract final class CreditCardCycleCalculator {
         : clampDate(refYear, refMonth + 1, dueDay);
 
     final competencyDate = installmentOffset == 0
-        ? DateTime(
-            purchaseDate.year,
-            purchaseDate.month,
-            purchaseDate.day,
-            12,
-          )
-        : addMonths(purchaseDate, installmentOffset);
+        ? purchaseDate
+        : DateFormatter.addMonthsPreservingTime(purchaseDate, installmentOffset);
 
     return InvoiceCycleTarget(
       invoiceId: buildInvoiceId(
@@ -216,7 +212,8 @@ abstract final class CreditCardCycleCalculator {
         installmentNumber: index + 1,
         totalInstallments: installmentCount,
         amountCents: parts[index].cents,
-        competencyDate: addMonths(purchaseDate, index),
+        competencyDate:
+            DateFormatter.addMonthsPreservingTime(purchaseDate, index),
         dueDate: addMonths(firstDueDate, index),
       );
     }, growable: false);

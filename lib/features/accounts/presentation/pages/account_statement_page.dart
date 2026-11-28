@@ -334,7 +334,8 @@ class _AccountStatementPageState extends ConsumerState<AccountStatementPage> {
                   data: (allTransactions) {
                     final filtered = allTransactions
                         .where(filter.matches)
-                        .toList(growable: false);
+                        .toList()
+                      ..sort(TransactionEntity.compareByRecencyDesc);
 
                     if (filtered.isEmpty) {
                       return EmptyStateView(

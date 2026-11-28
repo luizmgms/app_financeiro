@@ -1,10 +1,15 @@
 import 'dart:math' as math;
+import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 /// Formatadores e utilitários de data padronizados com suporte a `pt_BR`.
 abstract final class DateFormatter {
   static String shortDate(DateTime date, {String locale = 'pt_BR'}) {
     return DateFormat('dd/MM/yyyy', locale).format(date);
+  }
+
+  static String shortTime(DateTime date, {String locale = 'pt_BR'}) {
+    return DateFormat('HH:mm', locale).format(date);
   }
 
   static String shortDateTime(DateTime date, {String locale = 'pt_BR'}) {
@@ -23,6 +28,24 @@ abstract final class DateFormatter {
     return DateTime(date.year, date.month, date.day);
   }
 
+  /// Combina ano/mês/dia de [date] mantendo hora/minuto/segundo/ms de [timeSource].
+  static DateTime preserveTime(DateTime date, DateTime timeSource) {
+    return DateTime(
+      date.year,
+      date.month,
+      date.day,
+      timeSource.hour,
+      timeSource.minute,
+      timeSource.second,
+      timeSource.millisecond,
+    );
+  }
+
+  /// Combina ano/mês/dia de [date] com [time] escolhido no relógio.
+  static DateTime withTimeOfDay(DateTime date, TimeOfDay time) {
+    return DateTime(date.year, date.month, date.day, time.hour, time.minute);
+  }
+
   static String isoDateKey(DateTime date) {
     final y = date.year.toString().padLeft(4, '0');
     final m = date.month.toString().padLeft(2, '0');
@@ -38,5 +61,10 @@ abstract final class DateFormatter {
     final daysInTargetMonth = DateTime(targetYear, targetMonth + 1, 0).day;
     final clampedDay = math.min(anchor.day, daysInTargetMonth);
     return DateTime(targetYear, targetMonth, clampedDay);
+  }
+
+  /// Soma [monthsToAdd] mantendo dia âncora (clamped) e preservando o horário de [anchor].
+  static DateTime addMonthsPreservingTime(DateTime anchor, int monthsToAdd) {
+    return preserveTime(addMonthsClampingDay(anchor, monthsToAdd), anchor);
   }
 }

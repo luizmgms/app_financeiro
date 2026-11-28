@@ -4,10 +4,13 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/currency_formatter.dart';
 import '../../../../core/utils/date_formatter.dart';
 import '../../../../shared/models/money.dart';
+import '../../../../shared/widgets/date_time_picker_row.dart';
 import '../../../accounts/application/providers/account_providers.dart';
 import '../../../categories/application/providers/category_providers.dart';
 import '../../../categories/domain/entities/category_entity.dart';
 import '../../../profile/application/providers/profile_providers.dart';
+import '../../../recurring/application/controllers/recurring_controller.dart';
+import '../../../recurring/domain/entities/recurring_rule_entity.dart';
 import '../../application/controllers/credit_card_controller.dart';
 import '../../application/providers/credit_card_providers.dart';
 import '../../domain/entities/credit_card_entity.dart';
@@ -20,7 +23,13 @@ enum CardLaunchMode {
   accountInstallment,
 }
 
-/// Modal para lançar compra no cartão de crédito (à vista ou parcelada),
+/// Tipo de compra no cartão de crédito: parcelada/à vista ou assinatura recorrente sem término.
+enum CardPurchaseType {
+  installment,
+  recurring,
+}
+
+/// Modal para lançar compra no cartão de crédito (à vista, parcelada ou recorrente infinita),
 /// estorno/crédito avulso na fatura ou despesa parcelada diretamente em conta.
 Future<bool?> showCardPurchaseFormDialog(
   BuildContext context, {
@@ -28,6 +37,7 @@ Future<bool?> showCardPurchaseFormDialog(
   int initialInstallments = 1,
   bool startInAccountMode = false,
   bool startInRefundMode = false,
+  bool startInRecurringMode = false,
 }) {
   return showDialog<bool>(
     context: context,
@@ -36,6 +46,7 @@ Future<bool?> showCardPurchaseFormDialog(
       initialInstallments: initialInstallments,
       startInAccountMode: startInAccountMode,
       startInRefundMode: startInRefundMode,
+      startInRecurringMode: startInRecurringMode,
     ),
   );
 }
@@ -47,12 +58,14 @@ class CardPurchaseFormDialog extends ConsumerStatefulWidget {
     this.initialInstallments = 1,
     this.startInAccountMode = false,
     this.startInRefundMode = false,
+    this.startInRecurringMode = false,
   });
 
   final String? initialCardId;
   final int initialInstallments;
   final bool startInAccountMode;
   final bool startInRefundMode;
+  final bool startInRecurringMode;
 
   @override
   ConsumerState<CardPurchaseFormDialog> createState() =>
@@ -67,15 +80,20 @@ class _CardPurchaseFormDialogState
   final _notesController = TextEditingController();
 
   late CardLaunchMode _mode;
+  late CardPurchaseType _purchaseType;
   String? _selectedCardId;
   String? _selectedAccountId;
   String? _selectedCategoryId;
   late int _installments;
+  RecurringFrequency _recurringFrequency = RecurringFrequency.monthly;
   DateTime _purchaseDate = DateTime.now();
   String? _localError;
 
   bool get _isAccountMode => _mode == CardLaunchMode.accountInstallment;
   bool get _isRefundMode => _mode == CardLaunchMode.standaloneRefund;
+  bool get _isRecurringPurchase =>
+      _mode == CardLaunchMode.cardPurchase &&
+      _purchaseType == CardPurchaseType.recurring;
 
   @override
   void initState() {
@@ -87,6 +105,9 @@ class _CardPurchaseFormDialogState
     } else {
       _mode = CardLaunchMode.cardPurchase;
     }
+    _purchaseType = widget.startInRecurringMode
+        ? CardPurchaseType.recurring
+        : CardPurchaseType.installment;
     _selectedCardId = widget.initialCardId;
     _installments = _isAccountMode && widget.initialInstallments < 2
         ? 2
@@ -99,18 +120,6 @@ class _CardPurchaseFormDialogState
     _amountController.dispose();
     _notesController.dispose();
     super.dispose();
-  }
-
-  Future<void> _pickDate() async {
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: _purchaseDate,
-      firstDate: DateTime(2000),
-      lastDate: DateTime(2100),
-    );
-    if (picked != null) {
-      setState(() => _purchaseDate = picked);
-    }
   }
 
   Future<void> _submit() async {
@@ -130,6 +139,7 @@ class _CardPurchaseFormDialogState
 
     final controller = ref.read(creditCardControllerProvider.notifier);
     bool ok;
+    String? errorResult;
 
     if (_isAccountMode) {
       if (_selectedAccountId == null || _selectedAccountId!.isEmpty) {
@@ -145,6 +155,7 @@ class _CardPurchaseFormDialogState
         totalInstallments: _installments,
         notes: _notesController.text,
       );
+      errorResult = ref.read(creditCardControllerProvider).errorMessage;
     } else if (_isRefundMode) {
       if (_selectedCardId == null || _selectedCardId!.isEmpty) {
         setState(() => _localError = 'Selecione um cartão de crédito.');
@@ -158,6 +169,25 @@ class _CardPurchaseFormDialogState
         refundDate: _purchaseDate,
         notes: _notesController.text,
       );
+      errorResult = ref.read(creditCardControllerProvider).errorMessage;
+    } else if (_isRecurringPurchase) {
+      if (_selectedCardId == null || _selectedCardId!.isEmpty) {
+        setState(() => _localError = 'Selecione um cartão de crédito.');
+        return;
+      }
+      ok = await ref.read(recurringControllerProvider.notifier).saveRule(
+            kind: RecurringKind.expense,
+            description: _descriptionController.text,
+            amountCents: parsedCents,
+            isVariableAmount: false,
+            categoryId: _selectedCategoryId!,
+            cardId: _selectedCardId!,
+            frequency: _recurringFrequency,
+            startDate: _purchaseDate,
+            endDate: null,
+            notes: _notesController.text,
+          );
+      errorResult = ref.read(recurringControllerProvider).errorMessage;
     } else {
       if (_selectedCardId == null || _selectedCardId!.isEmpty) {
         setState(() => _localError = 'Selecione um cartão de crédito.');
@@ -172,6 +202,7 @@ class _CardPurchaseFormDialogState
         totalInstallments: _installments,
         notes: _notesController.text,
       );
+      errorResult = ref.read(creditCardControllerProvider).errorMessage;
     }
 
     if (!mounted) return;
@@ -179,14 +210,15 @@ class _CardPurchaseFormDialogState
       Navigator.of(context).pop(true);
     } else {
       setState(() {
-        _localError = ref.read(creditCardControllerProvider).errorMessage;
+        _localError = errorResult;
       });
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final isLoading = ref.watch(creditCardControllerProvider).isLoading;
+    final isLoading = ref.watch(creditCardControllerProvider).isLoading ||
+        ref.watch(recurringControllerProvider).isLoading;
     final cards = ref.watch(activeCreditCardsProvider);
     final accounts = ref.watch(activeAccountsProvider);
     final expenseCategories = ref
@@ -228,7 +260,7 @@ class _CardPurchaseFormDialogState
 
     final parsedCents =
         CurrencyFormatter.parseToCents(_amountController.text) ?? 0;
-    final splitSlices = parsedCents > 0 && !_isRefundMode
+    final splitSlices = parsedCents > 0 && !_isRefundMode && !_isRecurringPurchase
         ? Money(cents: parsedCents).splitEqually(_installments)
         : const <Money>[];
 
@@ -242,13 +274,16 @@ class _CardPurchaseFormDialogState
         : null;
 
     final titleText = switch (_mode) {
-      CardLaunchMode.cardPurchase => 'Nova compra no cartão',
+      CardLaunchMode.cardPurchase => _isRecurringPurchase
+          ? 'Nova assinatura no cartão'
+          : 'Nova compra no cartão',
       CardLaunchMode.standaloneRefund => 'Estorno avulso no cartão',
       CardLaunchMode.accountInstallment => 'Parcelamento em conta',
     };
 
-    final bannerAccent =
-        _isRefundMode ? AppColors.income : AppColors.primaryLight;
+    final bannerAccent = _isRefundMode
+        ? AppColors.income
+        : (_isRecurringPurchase ? AppColors.transfer : AppColors.primaryLight);
 
     final amountField = TextFormField(
       controller: _amountController,
@@ -257,7 +292,11 @@ class _CardPurchaseFormDialogState
         decimal: true,
       ),
       decoration: InputDecoration(
-        labelText: _isRefundMode ? 'Valor do estorno (R\$)' : 'Valor total (R\$)',
+        labelText: _isRefundMode
+            ? 'Valor do estorno (R\$)'
+            : (_isRecurringPurchase
+                ? 'Valor por cobrança (R\$)'
+                : 'Valor total (R\$)'),
         hintText: '0,00',
         prefixText: 'R\$ ',
       ),
@@ -296,6 +335,45 @@ class _CardPurchaseFormDialogState
               }
             },
     );
+
+    const cardRecurringFrequencies = <RecurringFrequency>[
+      RecurringFrequency.monthly,
+      RecurringFrequency.weekly,
+      RecurringFrequency.biweekly,
+      RecurringFrequency.bimonthly,
+      RecurringFrequency.quarterly,
+      RecurringFrequency.semiannual,
+      RecurringFrequency.annual,
+    ];
+
+    final frequencyField = DropdownButtonFormField<RecurringFrequency>(
+      value: _recurringFrequency,
+      isExpanded: true,
+      decoration: const InputDecoration(
+        labelText: 'Frequência',
+      ),
+      items: [
+        for (final freq in cardRecurringFrequencies)
+          DropdownMenuItem(
+            value: freq,
+            child: Text(
+              freq.label,
+              overflow: TextOverflow.ellipsis,
+              maxLines: 1,
+            ),
+          ),
+      ],
+      onChanged: isLoading
+          ? null
+          : (value) {
+              if (value != null) {
+                setState(() => _recurringFrequency = value);
+              }
+            },
+    );
+
+    final secondaryField =
+        _isRecurringPurchase ? frequencyField : installmentsField;
 
     const modeOptions = [
       (
@@ -426,6 +504,50 @@ class _CardPurchaseFormDialogState
                             setState(() => _selectedAccountId = value);
                           },
                   ),
+                if (_mode == CardLaunchMode.cardPurchase) ...[
+                  const SizedBox(height: 12),
+                  Text(
+                    'Tipo de compra',
+                    style: theme.textTheme.labelMedium?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
+                    children: [
+                      _CompactLaunchModeButton(
+                        label: 'Parcelada',
+                        tooltip: 'Compra à vista ou parcelada na fatura',
+                        icon: Icons.credit_score_rounded,
+                        selected:
+                            _purchaseType == CardPurchaseType.installment,
+                        accentColor: AppColors.primaryLight,
+                        onTap: isLoading
+                            ? null
+                            : () => setState(() {
+                                  _purchaseType =
+                                      CardPurchaseType.installment;
+                                }),
+                      ),
+                      _CompactLaunchModeButton(
+                        label: 'Recorrente',
+                        tooltip:
+                            'Assinatura contínua (infinita) nas faturas do cartão',
+                        icon: Icons.repeat_rounded,
+                        selected: _purchaseType == CardPurchaseType.recurring,
+                        accentColor: AppColors.transfer,
+                        onTap: isLoading
+                            ? null
+                            : () => setState(() {
+                                  _purchaseType = CardPurchaseType.recurring;
+                                }),
+                      ),
+                    ],
+                  ),
+                ],
                 const SizedBox(height: 10),
                 TextFormField(
                   controller: _descriptionController,
@@ -435,10 +557,14 @@ class _CardPurchaseFormDialogState
                   decoration: InputDecoration(
                     labelText: _isRefundMode
                         ? 'Descrição do estorno / crédito'
-                        : 'Descrição da compra',
+                        : (_isRecurringPurchase
+                            ? 'Nome da assinatura / recorrência'
+                            : 'Descrição da compra'),
                     hintText: _isRefundMode
                         ? 'Ex.: Estorno parcial, Cashback, Ajuste de centavos'
-                        : 'Ex.: Notebook, Supermercado, Seguro Auto',
+                        : (_isRecurringPurchase
+                            ? 'Ex.: Netflix, Spotify, Academia, iCloud'
+                            : 'Ex.: Notebook, Supermercado, Seguro Auto'),
                   ),
                   validator: (value) {
                     if (value == null || value.trim().isEmpty) {
@@ -451,13 +577,13 @@ class _CardPurchaseFormDialogState
                 LayoutBuilder(
                   builder: (context, constraints) {
                     if (_isRefundMode) return amountField;
-                    if (constraints.maxWidth < 250) {
+                    if (constraints.maxWidth < 300) {
                       return Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
                           amountField,
                           const SizedBox(height: 10),
-                          installmentsField,
+                          secondaryField,
                         ],
                       );
                     }
@@ -465,7 +591,7 @@ class _CardPurchaseFormDialogState
                       children: [
                         Expanded(child: amountField),
                         const SizedBox(width: 10),
-                        Expanded(child: installmentsField),
+                        Expanded(child: secondaryField),
                       ],
                     );
                   },
@@ -497,16 +623,20 @@ class _CardPurchaseFormDialogState
                         },
                 ),
                 const SizedBox(height: 12),
-                OutlinedButton.icon(
-                  onPressed: isLoading ? null : _pickDate,
-                  icon: const Icon(Icons.calendar_today_outlined, size: 18),
-                  label: Text(
-                    '${_isRefundMode ? 'Data do estorno' : 'Data da compra'}: ${DateFormatter.shortDate(_purchaseDate)}',
-                  ),
+                DateTimePickerField(
+                  label: _isRefundMode
+                      ? 'Estorno'
+                      : (_isRecurringPurchase
+                          ? 'Início'
+                          : 'Compra'),
+                  value: _purchaseDate,
+                  enabled: !isLoading,
+                  onChanged: (date) => setState(() => _purchaseDate = date),
                 ),
                 const SizedBox(height: 12),
                 if (cyclePreview != null ||
                     splitSlices.isNotEmpty ||
+                    _isRecurringPurchase ||
                     (_isRefundMode && parsedCents > 0))
                   Container(
                     padding: const EdgeInsets.all(12),
@@ -534,6 +664,22 @@ class _CardPurchaseFormDialogState
                             parsedCents > 0
                                 ? 'Abate ${CurrencyFormatter.formatCents(parsedCents, locale: locale, currencyCode: currency)} da fatura e recompõe o limite disponível do cartão, sem exigir vínculo com uma compra específica.'
                                 : 'Abate o valor informado diretamente na fatura e recompõe o limite disponível do cartão.',
+                            style: theme.textTheme.bodySmall,
+                          ),
+                        ] else if (_isRecurringPurchase) ...[
+                          if (cyclePreview != null)
+                            Text(
+                              '1ª cobrança na fatura ${cyclePreview.referenceMonth.toString().padLeft(2, '0')}/${cyclePreview.referenceYear} (venc. ${DateFormatter.shortDate(cyclePreview.dueDate)})',
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                fontWeight: FontWeight.w700,
+                                color: AppColors.transfer,
+                              ),
+                            ),
+                          const SizedBox(height: 4),
+                          Text(
+                            parsedCents > 0
+                                ? 'Assinatura contínua (${_recurringFrequency.label.toLowerCase()}) de ${CurrencyFormatter.formatCents(parsedCents, locale: locale, currencyCode: currency)} sem data de término — lança automaticamente nas próximas faturas até você pausar ou cancelar.'
+                                : 'Assinatura contínua (${_recurringFrequency.label.toLowerCase()}) sem data de término — lança automaticamente nas próximas faturas do cartão.',
                             style: theme.textTheme.bodySmall,
                           ),
                         ] else ...[
@@ -588,7 +734,11 @@ class _CardPurchaseFormDialogState
           child: Text(
             isLoading
                 ? 'Registrando...'
-                : (_isRefundMode ? 'Registrar estorno' : 'Registrar'),
+                : (_isRefundMode
+                    ? 'Registrar estorno'
+                    : (_isRecurringPurchase
+                        ? 'Ativar assinatura'
+                        : 'Registrar')),
           ),
         ),
       ],
@@ -652,14 +802,17 @@ class _CompactLaunchModeButton extends StatelessWidget {
                     color: foregroundColor,
                   ),
                   const SizedBox(width: 5),
-                  Text(
-                    label,
-                    maxLines: 1,
-                    softWrap: false,
-                    style: theme.textTheme.labelMedium?.copyWith(
-                      fontSize: 12,
-                      fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
-                      color: foregroundColor,
+                  Flexible(
+                    child: Text(
+                      label,
+                      maxLines: 1,
+                      softWrap: false,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.labelMedium?.copyWith(
+                        fontSize: 12,
+                        fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
+                        color: foregroundColor,
+                      ),
                     ),
                   ),
                 ],

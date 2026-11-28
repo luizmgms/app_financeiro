@@ -162,6 +162,15 @@ class TransactionEntity extends Equatable {
     return status;
   }
 
+  /// Ordenação cronológica decrescente padrão: data/hora de competência, criação e ID.
+  static int compareByRecencyDesc(TransactionEntity a, TransactionEntity b) {
+    final byDate = b.competencyDate.compareTo(a.competencyDate);
+    if (byDate != 0) return byDate;
+    final byCreated = b.createdAt.compareTo(a.createdAt);
+    if (byCreated != 0) return byCreated;
+    return b.id.compareTo(a.id);
+  }
+
   /// Impacto em centavos desta movimentação no saldo da conta [targetAccountId].
   int signedBalanceDeltaForAccount(String targetAccountId) {
     if (accountId != targetAccountId || !affectsAccountBalance) {

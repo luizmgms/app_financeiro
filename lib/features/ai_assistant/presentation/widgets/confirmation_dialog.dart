@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../../../core/utils/currency_formatter.dart';
-import '../../../../core/utils/date_formatter.dart';
+import '../../../../shared/widgets/date_time_picker_row.dart';
 import '../../../accounts/domain/entities/account_entity.dart';
 import '../../../categories/domain/entities/category_entity.dart';
 import '../../../credit_cards/domain/entities/credit_card_entity.dart';
@@ -239,20 +239,11 @@ class _AiSuggestionEditDialogState extends State<_AiSuggestionEditDialog> {
                     },
                   ),
                   const SizedBox(height: 12),
-                  OutlinedButton.icon(
-                    onPressed: () async {
-                      final picked = await showDatePicker(
-                        context: context,
-                        initialDate: _date,
-                        firstDate: DateTime(2000),
-                        lastDate: DateTime(2100),
-                      );
-                      if (picked != null && mounted) {
-                        setState(() => _date = picked);
-                      }
-                    },
-                    icon: const Icon(Icons.calendar_today_outlined, size: 18),
-                    label: Text('Data: ${DateFormatter.shortDate(_date)}'),
+                  DateTimePickerField(
+                    label: 'Data',
+                    value: _date,
+                    enabled: true,
+                    onChanged: (date) => setState(() => _date = date),
                   ),
                   if (_needsCategory) ...[
                     const SizedBox(height: 12),

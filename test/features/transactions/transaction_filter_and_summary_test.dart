@@ -1,7 +1,9 @@
+import 'package:finance_control/core/utils/date_formatter.dart';
 import 'package:finance_control/features/transactions/domain/entities/transaction_entity.dart';
 import 'package:finance_control/features/transactions/domain/entities/transaction_filter.dart';
 import 'package:finance_control/features/transactions/domain/entities/transaction_summary.dart';
 import 'package:finance_control/shared/models/date_period.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -163,5 +165,64 @@ void main() {
 
     expect(filter.matches(txMatching, now: today), isTrue);
     expect(filter.matches(txOtherMonth, now: today), isFalse);
+  });
+
+  test('compareByRecencyDesc ordena múltiplos lançamentos no mesmo dia por hora e desempate',
+      () {
+    final morning = makeTx(
+      id: 'tx_1',
+      kind: TransactionKind.expense,
+      description: 'Café',
+      amountCents: 1200,
+      status: TransactionStatus.paid,
+      competencyDate: DateTime(2026, 11, 27, 8, 15),
+    );
+    final afternoon = makeTx(
+      id: 'tx_2',
+      kind: TransactionKind.expense,
+      description: 'Almoço',
+      amountCents: 4500,
+      status: TransactionStatus.paid,
+      competencyDate: DateTime(2026, 11, 27, 13, 30),
+    );
+    final night = makeTx(
+      id: 'tx_3',
+      kind: TransactionKind.income,
+      description: 'Reembolso',
+      amountCents: 3000,
+      status: TransactionStatus.received,
+      competencyDate: DateTime(2026, 11, 27, 22, 40),
+    );
+    final sundayLate = makeTx(
+      id: 'tx_4',
+      kind: TransactionKind.expense,
+      description: 'Farmácia domingo',
+      amountCents: 2000,
+      status: TransactionStatus.paid,
+      competencyDate: DateTime(2026, 11, 22, 23, 59, 59, 900),
+    );
+
+    final sorted = [morning, night, afternoon]
+      ..sort(TransactionEntity.compareByRecencyDesc);
+    expect(sorted.map((t) => t.id).toList(), ['tx_3', 'tx_2', 'tx_1']);
+
+    final withTime = DateFormatter.preserveTime(
+      DateTime(2026, 12, 1),
+      DateTime(2026, 11, 27, 22, 40, 15),
+    );
+    expect(withTime, DateTime(2026, 12, 1, 22, 40, 15));
+    expect(
+      DateFormatter.withTimeOfDay(
+        DateTime(2026, 11, 27),
+        const TimeOfDay(hour: 19, minute: 45),
+      ),
+      DateTime(2026, 11, 27, 19, 45),
+    );
+
+    final weekPeriod = DatePeriod.fromType(
+      DatePeriodType.thisWeek,
+      reference: DateTime(2026, 11, 18),
+    );
+    expect(weekPeriod.contains(sundayLate.competencyDate), isTrue);
   });
 }

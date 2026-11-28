@@ -5,6 +5,7 @@ import '../../../../core/constants/app_constants.dart';
 import '../../../../core/routes/app_routes.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../shared/providers/app_bootstrap_provider.dart';
+import '../../../../shared/widgets/app_brand_logo.dart';
 
 /// Container responsivo compartilhado pelas telas de Login, Cadastro e Recuperação.
 class AuthScaffold extends ConsumerWidget {
@@ -53,19 +54,7 @@ class AuthScaffold extends ConsumerWidget {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Container(
-                        width: 48,
-                        height: 48,
-                        decoration: BoxDecoration(
-                          color: AppColors.primaryLight,
-                          borderRadius: BorderRadius.circular(14),
-                        ),
-                        child: const Icon(
-                          Icons.account_balance_rounded,
-                          color: Colors.white,
-                          size: 26,
-                        ),
-                      ),
+                      const AppBrandLogo(size: 50),
                       const SizedBox(width: 12),
                       Flexible(
                         child: Column(

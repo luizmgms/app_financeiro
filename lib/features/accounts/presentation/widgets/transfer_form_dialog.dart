@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/currency_formatter.dart';
-import '../../../../core/utils/date_formatter.dart';
+import '../../../../shared/widgets/date_time_picker_row.dart';
 import '../../application/controllers/account_controller.dart';
 import '../../application/providers/account_providers.dart';
 
@@ -58,18 +58,6 @@ class _TransferFormDialogState extends ConsumerState<TransferFormDialog> {
     _descriptionController.dispose();
     _notesController.dispose();
     super.dispose();
-  }
-
-  Future<void> _pickDate() async {
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: _transferDate,
-      firstDate: DateTime(2000),
-      lastDate: DateTime(2100),
-    );
-    if (picked != null) {
-      setState(() => _transferDate = picked);
-    }
   }
 
   Future<void> _submit() async {
@@ -225,13 +213,12 @@ class _TransferFormDialogState extends ConsumerState<TransferFormDialog> {
                         },
                       ),
                       const SizedBox(height: 12),
-                      OutlinedButton.icon(
-                        onPressed: isLoading ? null : _pickDate,
-                        icon:
-                            const Icon(Icons.calendar_today_outlined, size: 18),
-                        label: Text(
-                          'Data da transferência: ${DateFormatter.shortDate(_transferDate)}',
-                        ),
+                      DateTimePickerField(
+                        label: 'Transferência',
+                        value: _transferDate,
+                        enabled: !isLoading,
+                        onChanged: (date) =>
+                            setState(() => _transferDate = date),
                       ),
                       const SizedBox(height: 12),
                       TextFormField(
